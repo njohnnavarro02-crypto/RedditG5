@@ -93,6 +93,43 @@ export const COMMUNITIES: Community[] = [
 
 export const POSTS: Post[] = [
   {
+    id: 'p_video_featured',
+    communityId: 'gaming',
+    author: 'u/clip_god',
+    time: '25m',
+    hoursAgo: 0.4,
+    title: 'Insane 1v4 clutch in overtime — world championship qualifier clip!',
+    body: 'Down to 12 HP with 15 seconds on the defusal clock. Watch how the final flashbang lineup baited the entire squad. Sound on for the crowd and commentator reaction! 🔥',
+    score: 9540,
+    commentCount: 3,
+    myVote: 0,
+    videoUrl: 'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4',
+    imageUrl: 'https://images.unsplash.com/photo-1542751371-adc38448a05e?w=800&q=80',
+    comments: [
+      {
+        id: 'cv_1',
+        author: 'u/esports_fanatic',
+        time: '20m',
+        body: 'The crosshair placement on that 3rd kill was pure muscle memory. Play of the tournament!',
+        score: 1420,
+      },
+      {
+        id: 'cv_2',
+        author: 'u/tactical_timmy',
+        time: '15m',
+        body: 'I would have panicked and whiffed every shot. Ice in his veins.',
+        score: 830,
+      },
+      {
+        id: 'cv_3',
+        author: 'u/clip_god',
+        time: '10m',
+        body: 'Thanks guys! Practiced that flashbang lineup in custom games for weeks.',
+        score: 410,
+      },
+    ],
+  },
+  {
     id: 'p1',
     communityId: 'technology',
     author: 'u/circuit_sam',
@@ -306,6 +343,8 @@ export const POSTS: Post[] = [
     score: 244,
     commentCount: 2,
     myVote: 0,
+    videoUrl: 'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerBlazes.mp4',
+    imageUrl: 'https://images.unsplash.com/photo-1511512578047-dfb367046420?w=800&q=80',
     comments: [
       {
         id: 'c7_1',

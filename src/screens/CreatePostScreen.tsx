@@ -42,9 +42,33 @@ const SAMPLE_IMAGES = [
   },
 ];
 
+// Quick sample video clip presets for instant selection
+const SAMPLE_VIDEOS = [
+  {
+    name: '🎮 Gaming Clutch Clip (MP4)',
+    url: 'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4',
+    thumb: 'https://images.unsplash.com/photo-1542751371-adc38448a05e?w=800&q=80',
+  },
+  {
+    name: '🚀 Space Exploration (MP4)',
+    url: 'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ElephantsDream.mp4',
+    thumb: 'https://images.unsplash.com/photo-1451187580459-43490279c0fa?w=800&q=80',
+  },
+  {
+    name: '💻 Code Timelapse (MP4)',
+    url: 'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerBlazes.mp4',
+    thumb: 'https://images.unsplash.com/photo-1555066931-4365d14bab8c?w=800&q=80',
+  },
+  {
+    name: '🌿 Nature Cinematic (MP4)',
+    url: 'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/TearsOfSteel.mp4',
+    thumb: 'https://images.unsplash.com/photo-1470071459604-3b5ec3a7fe05?w=800&q=80',
+  },
+];
+
 const EMOJIS = ['🔥', '🚀', '🤖', '💡', '💎', '📈', '💬', '🎉', '👏', '👀'];
 
-/** Create Post screen: community picker, title, body, pictures, videos, links, and posting. */
+/** Create Post screen: community picker, title, body, pictures, video clips, links, and posting. */
 export default function CreatePostScreen() {
   const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
   const {addPost} = usePosts();
@@ -184,17 +208,25 @@ export default function CreatePostScreen() {
           </View>
         )}
 
-        {/* Attached Video Preview */}
+        {/* Attached Video Preview with Player Frame */}
         {!!videoUrl && (
           <View style={styles.attachmentCard}>
             <View style={styles.attachmentHeader}>
               <View style={styles.badgeRow}>
-                <Icon name="sparkle" size={16} color={C.blue} />
-                <Text style={styles.attachmentTitle}>Video link attached</Text>
+                <Icon name="video" size={16} color={C.orange} />
+                <Text style={styles.attachmentTitle}>Video clip attached</Text>
               </View>
               <TouchableOpacity onPress={() => setVideoUrl('')} hitSlop={{top: 8, bottom: 8, left: 8, right: 8}}>
                 <Icon name="close" size={18} color={C.danger} />
               </TouchableOpacity>
+            </View>
+            <View style={styles.videoPreviewPlayer}>
+              <View style={styles.videoPlayOverlay}>
+                <View style={styles.playCircle}>
+                  <Icon name="play" size={24} color={C.white} />
+                </View>
+                <Text style={styles.videoReadyText}>Video Clip Ready</Text>
+              </View>
             </View>
             <Text style={styles.attachmentUrl} numberOfLines={1}>
               {videoUrl}
@@ -232,12 +264,12 @@ export default function CreatePostScreen() {
             <Icon name="image" size={20} color={imageUrl ? C.orange : C.text} />
           </TouchableOpacity>
 
-          {/* Add Video Tool */}
+          {/* Add Video Clip Tool */}
           <TouchableOpacity
             style={[styles.toolBtn, !!videoUrl && styles.toolBtnActive]}
             onPress={() => openAttachmentModal('video')}
             activeOpacity={0.7}>
-            <Icon name="sparkle" size={20} color={videoUrl ? C.orange : C.text} />
+            <Icon name="video" size={20} color={videoUrl ? C.orange : C.text} />
           </TouchableOpacity>
 
           {/* Add Link Tool */}
@@ -288,7 +320,7 @@ export default function CreatePostScreen() {
                 {activeModal === 'image'
                   ? 'Attach Picture'
                   : activeModal === 'video'
-                  ? 'Attach Video URL'
+                  ? 'Attach Video Clip'
                   : 'Attach Web Link'}
               </Text>
               <TouchableOpacity onPress={() => setActiveModal(null)}>
@@ -300,7 +332,7 @@ export default function CreatePostScreen() {
               {activeModal === 'image'
                 ? 'Enter an Image URL or select a sample image below:'
                 : activeModal === 'video'
-                ? 'Enter a Video Link (YouTube, MP4, Reddit video):'
+                ? 'Enter an MP4 / YouTube / Reddit Video URL or pick a clip below:'
                 : 'Enter a Website URL (https://...):'}
             </Text>
 
@@ -310,7 +342,7 @@ export default function CreatePostScreen() {
                 activeModal === 'image'
                   ? 'https://example.com/photo.jpg'
                   : activeModal === 'video'
-                  ? 'https://youtube.com/watch?v=...'
+                  ? 'https://example.com/video.mp4'
                   : 'https://mywebsite.com'
               }
               placeholderTextColor={C.faint}
@@ -339,6 +371,32 @@ export default function CreatePostScreen() {
                           modalInput === s.url && styles.presetChipTextActive,
                         ]}>
                         {s.name}
+                      </Text>
+                    </TouchableOpacity>
+                  ))}
+                </View>
+              </View>
+            )}
+
+            {/* Quick Presets for Video Clips */}
+            {activeModal === 'video' && (
+              <View style={styles.presetsWrap}>
+                <Text style={styles.presetsTitle}>Quick Sample Video Clips:</Text>
+                <View style={styles.presetsGrid}>
+                  {SAMPLE_VIDEOS.map(v => (
+                    <TouchableOpacity
+                      key={v.name}
+                      style={[
+                        styles.presetChip,
+                        modalInput === v.url && styles.presetChipActive,
+                      ]}
+                      onPress={() => setModalInput(v.url)}>
+                      <Text
+                        style={[
+                          styles.presetChipText,
+                          modalInput === v.url && styles.presetChipTextActive,
+                        ]}>
+                        {v.name}
                       </Text>
                     </TouchableOpacity>
                   ))}
@@ -465,12 +523,41 @@ const styles = StyleSheet.create({
   attachmentUrl: {
     fontSize: 12,
     color: C.sub,
+    marginTop: 4,
   },
   previewImage: {
     width: '100%',
     height: 180,
     borderRadius: 8,
     marginTop: 6,
+  },
+  videoPreviewPlayer: {
+    width: '100%',
+    height: 140,
+    borderRadius: 8,
+    backgroundColor: '#0F172A',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginTop: 6,
+  },
+  videoPlayOverlay: {
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  playCircle: {
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+    backgroundColor: C.orange,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingLeft: 3,
+    marginBottom: 6,
+  },
+  videoReadyText: {
+    color: C.white,
+    fontSize: 12,
+    fontWeight: '700',
   },
   footer: {
     flexDirection: 'row',

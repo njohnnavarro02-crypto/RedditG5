@@ -176,16 +176,37 @@ export default function PostCard({post, showCommunity = true}: Props) {
         </View>
       )}
 
-      {/* Attached Media: Video Badge */}
+      {/* Attached Media: Video Card */}
       {!!post.videoUrl && (
         <TouchableOpacity
-          style={styles.mediaPill}
-          activeOpacity={0.8}
+          style={styles.videoCard}
+          activeOpacity={0.85}
           onPress={() => handleOpenUrl(post.videoUrl)}>
-          <Icon name="sparkle" size={14} color={C.orange} />
-          <Text style={styles.mediaPillText} numberOfLines={1}>
-            Watch video: {post.videoUrl}
-          </Text>
+          <View style={styles.videoPlayerFrame}>
+            <Image
+              source={{
+                uri:
+                  post.imageUrl ||
+                  'https://images.unsplash.com/photo-1542751371-adc38448a05e?w=800&q=80',
+              }}
+              style={styles.videoThumb}
+              resizeMode="cover"
+            />
+            <View style={styles.videoOverlay}>
+              <View style={styles.playBtnCircle}>
+                <Icon name="play" size={24} color={C.white} />
+              </View>
+              <View style={styles.videoTag}>
+                <Icon name="video" size={13} color={C.white} />
+                <Text style={styles.videoTagText}>PLAY VIDEO CLIP</Text>
+              </View>
+            </View>
+          </View>
+          <View style={styles.videoBottomBar}>
+            <Text style={styles.videoUrlText} numberOfLines={1}>
+              ▶ {post.videoUrl}
+            </Text>
+          </View>
         </TouchableOpacity>
       )}
 
@@ -563,5 +584,64 @@ const styles = StyleSheet.create({
   editSaveText: {
     color: C.white,
     fontWeight: '700',
+  },
+  videoCard: {
+    marginTop: 10,
+    borderRadius: 12,
+    overflow: 'hidden',
+    backgroundColor: '#0F172A',
+    borderWidth: 1,
+    borderColor: C.hairline,
+  },
+  videoPlayerFrame: {
+    width: '100%',
+    height: 190,
+    position: 'relative',
+  },
+  videoThumb: {
+    width: '100%',
+    height: '100%',
+    opacity: 0.85,
+  },
+  videoOverlay: {
+    ...StyleSheet.absoluteFill,
+    backgroundColor: 'rgba(0, 0, 0, 0.35)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  playBtnCircle: {
+    width: 52,
+    height: 52,
+    borderRadius: 26,
+    backgroundColor: 'rgba(255, 69, 0, 0.9)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingLeft: 3,
+    marginBottom: 8,
+  },
+  videoTag: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    backgroundColor: 'rgba(0, 0, 0, 0.65)',
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 6,
+  },
+  videoTagText: {
+    color: C.white,
+    fontSize: 11,
+    fontWeight: '800',
+    letterSpacing: 0.5,
+  },
+  videoBottomBar: {
+    backgroundColor: '#1E293B',
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+  },
+  videoUrlText: {
+    color: C.orangeSoft,
+    fontSize: 12,
+    fontWeight: '600',
   },
 });
