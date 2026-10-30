@@ -148,15 +148,21 @@ export default function PostDetailScreen({route, navigation}: Props) {
     }
   };
 
-  const handleOpenUrl = (url?: string) => {
+  const handleOpenUrl = async (url?: string) => {
     if (!url) return;
-    Linking.canOpenURL(url).then(supported => {
-      if (supported) {
-        Linking.openURL(url);
-      } else {
-        Alert.alert('Invalid URL', `Cannot open ${url}`);
+    try {
+      await Linking.openURL(url);
+    } catch {
+      try {
+        const fullUrl =
+          url.startsWith('http://') || url.startsWith('https://')
+            ? url
+            : `https://${url}`;
+        await Linking.openURL(fullUrl);
+      } catch (err: any) {
+        Alert.alert('Cannot Open Video', 'Unable to play video: ' + (err?.message || url));
       }
-    });
+    }
   };
 
   return (
