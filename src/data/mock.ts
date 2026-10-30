@@ -53,13 +53,9 @@ export const POSTS: Post[] = [
     title: 'USB-C everything: EU deadline hits, and honestly my desk has never been cleaner',
     body: 'Two years after the rules landed, almost every gadget I own charges off the same brick. Laptops, controllers, headphones — one cable to rule them all. Anyone else finally cleared out their junk drawer this week?',
     score: 12399,
-    commentCount: 354,
+    commentCount: 0,
     myVote: 0,
-    comments: [
-      {id: 'c1', author: 'u/usb_ufop', time: '4h', body: 'Bought a single 100W GaN charger and threw out six bricks. Best EU law ever.', score: 1284},
-      {id: 'c2', author: 'u/mac_user_42', time: '3h', body: 'Meanwhile my phone and my tablet still ship with different cables in the box lol', score: 892},
-      {id: 'c3', author: 'u/electro_liz', time: '2h', body: 'The junk drawer cleanup is real. I filled an entire shoebox with orphaned cables.', score: 341},
-    ],
+    comments: [],
   },
   {
     id: 'p2',
@@ -252,18 +248,17 @@ export const POSTS: Post[] = [
 ];
 
 /** Fallback comment pool for posts without seeded comments. */
-export const DEFAULT_COMMENTS: Comment[] = [
-  {id: 'd1', author: 'u/threadwalker', time: '2h', body: 'This is the content I come here for.', score: 127},
-  {id: 'd2', author: 'u/lurk_and_learn', time: '1h', body: 'Saving this for later, thanks!', score: 64},
-  {id: 'd3', author: 'u/mildly_opinionated', time: '45m', body: 'Hot take: the opposite is also true.', score: 23},
-];
+export const DEFAULT_COMMENTS: Comment[] = [];
 
 /** Mock comments shown on the Profile screen. */
-export const MY_COMMENTS = [
-  {id: 'm1', postId: 'p10', communityId: 'programming', time: '3h', body: 'satisfies deserves way more hype than it gets. Great list.', score: 214},
-  {id: 'm2', postId: 'p5', communityId: 'gaming', time: '1d', body: 'The stun nerf is honestly bigger than people realize.', score: 87},
-  {id: 'm3', postId: 'p13', communityId: 'education', time: '2d', body: 'Anki + spaced repetition carried me through finals season too.', score: 156},
-];
+export const MY_COMMENTS: {
+  id: string;
+  postId: string;
+  communityId: string;
+  time: string;
+  body: string;
+  score: number;
+}[] = [];
 
 /** Canned "Ask the Feed" answers with [P1]-style citations into refs. */
 export const AI_ANSWERS: AiAnswer[] = [

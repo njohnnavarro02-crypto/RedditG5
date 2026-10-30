@@ -1,4 +1,4 @@
-import React, {useState} from 'react';
+import React, {useMemo, useState} from 'react';
 import {
   FlatList,
   Image,
@@ -12,7 +12,6 @@ import {useNavigation} from '@react-navigation/native';
 import type {NativeStackNavigationProp} from '@react-navigation/native-stack';
 import PostCard from '../components/PostCard';
 import {usePosts} from '../context/PostsContext';
-import {MY_COMMENTS} from '../data/mock';
 import type {RootStackParamList} from '../navigation/types';
 import {C} from '../theme';
 import {fmt} from '../utils';
@@ -25,16 +24,81 @@ const SEGMENTS: {key: Segment; label: string}[] = [
   {key: 'comments', label: 'Comments'},
 ];
 
-/** Profile screen: avatar, karma, tabs for posts/comments, and log out. */
+/** Profile screen: avatar, dynamic karma starting at 0, tabs for posts/comments, and log out. */
 export default function ProfileScreen() {
   const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
   const insets = useSafeAreaInsets();
   const {userName, userPhoto, posts, signOut, user} = usePosts();
   const [segment, setSegment] = useState<Segment>('overview');
 
-  const myPosts = posts.filter(
-    p => (user && p.authorId === user.uid) || p.author === 'u/' + userName,
+  // Filter posts authored by this user
+  const myPosts = useMemo(
+    () =>
+      posts.filter(
+        p => (user && p.authorId === user.uid) || p.author === 'u/' + userName,
+      ),
+    [posts, user, userName],
   );
+
+  // Filter comments authored by this user across all posts
+  const myComments = useMemo(() => {
+    const list: {
+      id: string;
+      postId: string;
+      communityId: string;
+      time: string;
+      body: string;
+      score: number;
+    }[] = [];
+
+    posts.forEach(p => {
+      (p.comments || []).forEach(c => {
+        if (c.author === 'u/' + userName) {
+          list.push({
+            id: c.id,
+            postId: p.id,
+            communityId: p.communityId,
+            time: c.time,
+            body: c.body,
+            score: c.score,
+          });
+        }
+      });
+    });
+
+    return list;
+  }, [posts, userName]);
+
+  // Dynamic karma starting at 0 for new accounts
+  const postKarma = useMemo(() => {
+    // If the account has no posts, karma starts at 0
+    if (myPosts.length === 0) return 0;
+    return myPosts.reduce((acc, p) => acc + Math.max(0, p.score), 0);
+  }, [myPosts]);
+
+  const commentKarma = useMemo(() => {
+    // If the account has no comments, karma starts at 0
+    if (myComments.length === 0) return 0;
+    return myComments.reduce((acc, c) => acc + Math.max(0, c.score), 0);
+  }, [myComments]);
+
+  // Dynamic cake day
+  const cakeDay = useMemo(() => {
+    if (user?.metadata?.creationTime) {
+      const d = new Date(user.metadata.creationTime);
+      return `Cake day: ${d.toLocaleDateString('en-US', {
+        month: 'short',
+        day: 'numeric',
+        year: 'numeric',
+      })}`;
+    }
+    return `Cake day: ${new Date().toLocaleDateString('en-US', {
+      month: 'short',
+      day: 'numeric',
+      year: 'numeric',
+    })}`;
+  }, [user]);
+
   const showPosts = segment === 'overview' || segment === 'posts';
 
   return (
@@ -45,13 +109,13 @@ export default function ProfileScreen() {
           style={styles.avatar}
         />
         <Text style={styles.name}>u/{userName}</Text>
-        <Text style={styles.cakeDay}>Cake day: Jan 15, 2025</Text>
+        <Text style={styles.cakeDay}>{cakeDay}</Text>
         <View style={styles.karmaRow}>
           <View style={styles.karmaChip}>
-            <Text style={styles.karmaText}>Post karma 4,128</Text>
+            <Text style={styles.karmaText}>Post karma {fmt(postKarma)}</Text>
           </View>
           <View style={styles.karmaChip}>
-            <Text style={styles.karmaText}>Comment karma 12.4k</Text>
+            <Text style={styles.karmaText}>Comment karma {fmt(commentKarma)}</Text>
           </View>
         </View>
       </View>
@@ -87,19 +151,23 @@ export default function ProfileScreen() {
         ListFooterComponent={
           !showPosts ? (
             <View style={styles.commentsWrap}>
-              {MY_COMMENTS.map(c => (
-                <TouchableOpacity
-                  key={c.id}
-                  style={styles.commentRow}
-                  activeOpacity={0.9}
-                  onPress={() => navigation.navigate('PostDetail', {postId: c.postId})}>
-                  <Text style={styles.commentMeta}>
-                    r/{c.communityId} • {c.time}
-                  </Text>
-                  <Text style={styles.commentBody}>{c.body}</Text>
-                  <Text style={styles.commentScore}>{fmt(c.score)} points</Text>
-                </TouchableOpacity>
-              ))}
+              {myComments.length === 0 ? (
+                <Text style={styles.empty}>You haven't commented on any posts yet.</Text>
+              ) : (
+                myComments.map(c => (
+                  <TouchableOpacity
+                    key={c.id}
+                    style={styles.commentRow}
+                    activeOpacity={0.9}
+                    onPress={() => navigation.navigate('PostDetail', {postId: c.postId})}>
+                    <Text style={styles.commentMeta}>
+                      r/{c.communityId} • {c.time}
+                    </Text>
+                    <Text style={styles.commentBody}>{c.body}</Text>
+                    <Text style={styles.commentScore}>{fmt(c.score)} points</Text>
+                  </TouchableOpacity>
+                ))
+              )}
             </View>
           ) : (
             <View style={styles.logoutWrap}>

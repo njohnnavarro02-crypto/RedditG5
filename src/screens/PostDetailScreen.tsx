@@ -71,9 +71,7 @@ export default function PostDetailScreen({route, navigation}: Props) {
   const mine = canEditPost(post);
   const canDelete = canDeletePost(post);
 
-  const comments: Comment[] = post.comments?.length
-    ? post.comments
-    : DEFAULT_COMMENTS.map(c => ({...c}));
+  const comments: Comment[] = post.comments || [];
 
   const submit = () => {
     const body = draft.trim();
@@ -275,6 +273,15 @@ export default function PostDetailScreen({route, navigation}: Props) {
             </View>
           </View>
         )}
+        ListEmptyComponent={
+          <View style={styles.emptyComments}>
+            <Icon name="comment" size={28} color={C.faint} />
+            <Text style={styles.emptyCommentsTitle}>No comments yet</Text>
+            <Text style={styles.emptyCommentsSub}>
+              Be the first to share what you think!
+            </Text>
+          </View>
+        }
       />
 
       <View style={[styles.composer, {paddingBottom: Math.max(insets.bottom, 8) + 4}]}>
@@ -743,5 +750,23 @@ const styles = StyleSheet.create({
   editSaveText: {
     color: C.white,
     fontWeight: '700',
+  },
+  emptyComments: {
+    paddingVertical: 36,
+    paddingHorizontal: 20,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  emptyCommentsTitle: {
+    marginTop: 8,
+    fontSize: 15,
+    fontWeight: '700',
+    color: C.text,
+  },
+  emptyCommentsSub: {
+    marginTop: 4,
+    fontSize: 13,
+    color: C.faint,
+    textAlign: 'center',
   },
 });
