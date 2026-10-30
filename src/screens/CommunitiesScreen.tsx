@@ -1,4 +1,4 @@
-import React, {useState} from 'react';
+import React, { useState } from 'react';
 import {
   FlatList,
   StyleSheet,
@@ -6,14 +6,15 @@ import {
   TouchableOpacity,
   View,
 } from 'react-native';
-import {useSafeAreaInsets} from 'react-native-safe-area-context';
-import {useNavigation} from '@react-navigation/native';
-import type {NativeStackNavigationProp} from '@react-navigation/native-stack';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useNavigation } from '@react-navigation/native';
+import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import CommunityAvatar from '../components/CommunityAvatar';
+import Icon from '../components/Icon';
 import JoinButton from '../components/JoinButton';
-import {COMMUNITIES} from '../data/mock';
-import type {RootStackParamList} from '../navigation/types';
-import {C} from '../theme';
+import { COMMUNITIES } from '../data/mock';
+import type { RootStackParamList } from '../navigation/types';
+import { C } from '../theme';
 
 /** Communities directory: list of r/ channels with member counts and Join. */
 export default function CommunitiesScreen() {
@@ -37,6 +38,12 @@ export default function CommunitiesScreen() {
     <View style={styles.screen}>
       <View style={[styles.header, {paddingTop: insets.top + 6}]}>
         <Text style={styles.title}>Communities</Text>
+        <TouchableOpacity
+          onPress={() => navigation.navigate('CreateCommunity')}
+          style={styles.addBtn}
+          hitSlop={{top: 8, bottom: 8, left: 8, right: 8}}>
+          <Icon name="plus" size={24} color={C.orange} />
+        </TouchableOpacity>
       </View>
       <FlatList
         data={COMMUNITIES}
@@ -62,7 +69,7 @@ export default function CommunitiesScreen() {
           </TouchableOpacity>
         )}
       />
-    </View>
+    </View >
   );
 }
 
@@ -72,6 +79,9 @@ const styles = StyleSheet.create({
     backgroundColor: C.white,
   },
   header: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
     backgroundColor: C.white,
     paddingHorizontal: 16,
     paddingBottom: 10,
@@ -82,6 +92,9 @@ const styles = StyleSheet.create({
     fontSize: 24,
     fontWeight: '800',
     color: C.text,
+  },
+  addBtn: {
+    padding: 8,
   },
   list: {
     paddingTop: 6,

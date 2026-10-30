@@ -7,6 +7,7 @@ import {C} from '../theme';
 import AskScreen from '../screens/AskScreen';
 import CommunitiesScreen from '../screens/CommunitiesScreen';
 import CommunityScreen from '../screens/CommunityScreen';
+import CreateCommunityScreen from '../screens/CreateCommunityScreen';
 import CreatePostScreen from '../screens/CreatePostScreen';
 import HomeScreen from '../screens/HomeScreen';
 import PostDetailScreen from '../screens/PostDetailScreen';
@@ -60,6 +61,7 @@ export default function RootNavigator() {
         <>
           <Stack.Screen name="Main" component={Tabs} />
           <Stack.Screen name="Community" component={CommunityScreen} />
+          <Stack.Screen name="CreateCommunity" component={CreateCommunityScreen} />
           <Stack.Screen name="PostDetail" component={PostDetailScreen} />
         </>
       ) : (
