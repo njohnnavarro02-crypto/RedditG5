@@ -379,10 +379,11 @@ export function PostsProvider({children}: {children: React.ReactNode}) {
           if (p.id !== postId) {
             return p;
           }
+          const nextComments = [...(p.comments ?? []), comment];
           return {
             ...p,
-            commentCount: p.commentCount + 1,
-            comments: [...(p.comments ?? []), comment],
+            commentCount: nextComments.length,
+            comments: nextComments,
           };
         });
 

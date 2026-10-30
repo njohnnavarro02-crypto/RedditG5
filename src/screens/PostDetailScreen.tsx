@@ -244,7 +244,7 @@ export default function PostDetailScreen({route, navigation}: Props) {
               />
               <View style={styles.pill}>
                 <Icon name="comment" size={16} color={C.faint} />
-                <Text style={styles.pillText}>{fmt(post.commentCount)}</Text>
+                <Text style={styles.pillText}>{fmt(comments.length)}</Text>
               </View>
               <TouchableOpacity
                 style={[styles.pill, styles.sharePill]}
