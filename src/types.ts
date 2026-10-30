@@ -20,6 +20,8 @@ export type Post = {
   id: string;
   communityId: string;
   author: string;
+  authorId?: string;
+  authorPhotoUrl?: string;
   time: string;
   hoursAgo: number;
   title: string;
@@ -29,6 +31,10 @@ export type Post = {
   commentCount: number;
   myVote: MyVote;
   comments?: Comment[];
+  imageUrl?: string;
+  videoUrl?: string;
+  linkUrl?: string;
+  createdAt?: any;
 };
 
 export type AiAnswer = {

@@ -4,13 +4,17 @@ import {
   Image,
   StyleSheet,
   Text,
+  TextInput,
   TouchableOpacity,
   View,
 } from 'react-native';
 import {useSafeAreaInsets} from 'react-native-safe-area-context';
+import {useNavigation} from '@react-navigation/native';
+import type {BottomTabNavigationProp} from '@react-navigation/bottom-tabs';
 import Icon from '../components/Icon';
 import PostCard from '../components/PostCard';
 import {usePosts} from '../context/PostsContext';
+import type {TabParamList} from '../navigation/types';
 import {C} from '../theme';
 import {Post} from '../types';
 
@@ -39,26 +43,96 @@ function sortPosts(posts: Post[], sort: SortKey): Post[] {
   }
 }
 
-/** Home feed: logo header, sort chips, Reddit-style post cards. */
+/** Home feed: logo header, clickable search & chat icons, sort chips, Reddit-style post cards. */
 export default function HomeScreen() {
+  const navigation = useNavigation<BottomTabNavigationProp<TabParamList>>();
   const {posts} = usePosts();
   const insets = useSafeAreaInsets();
   const [sort, setSort] = useState<SortKey>('hot');
+  const [isSearching, setIsSearching] = useState(false);
+  const [searchQuery, setSearchQuery] = useState('');
 
-  const sorted = useMemo(() => sortPosts(posts, sort), [posts, sort]);
+  // Filter posts based on search query
+  const filteredPosts = useMemo(() => {
+    if (!searchQuery.trim()) {
+      return posts;
+    }
+    const q = searchQuery.toLowerCase().trim();
+    return posts.filter(
+      p =>
+        p.title.toLowerCase().includes(q) ||
+        p.body.toLowerCase().includes(q) ||
+        p.communityId.toLowerCase().includes(q) ||
+        p.author.toLowerCase().includes(q),
+    );
+  }, [posts, searchQuery]);
+
+  const sorted = useMemo(() => sortPosts(filteredPosts, sort), [filteredPosts, sort]);
+
+  const handleOpenChat = () => {
+    navigation.navigate('Ask');
+  };
+
+  const handleCloseSearch = () => {
+    setIsSearching(false);
+    setSearchQuery('');
+  };
 
   return (
     <View style={styles.screen}>
       <View style={[styles.header, {paddingTop: insets.top + 6}]}>
-        <Image
-          source={require('../assets/reddit-logo.png')}
-          style={styles.logo}
-          resizeMode="contain"
-        />
-        <View style={styles.headerIcons}>
-          <Icon name="search" size={22} color={C.text} />
-          <Icon name="comment" size={22} color={C.text} />
-        </View>
+        {isSearching ? (
+          <View style={styles.searchBarContainer}>
+            <Icon name="search" size={20} color={C.faint} />
+            <TextInput
+              style={styles.searchInput}
+              placeholder="Search posts, tags, communities..."
+              placeholderTextColor={C.faint}
+              value={searchQuery}
+              onChangeText={setSearchQuery}
+              autoFocus
+              returnKeyType="search"
+            />
+            {searchQuery.length > 0 && (
+              <TouchableOpacity
+                onPress={() => setSearchQuery('')}
+                hitSlop={{top: 10, bottom: 10, left: 10, right: 10}}
+                style={styles.clearBtn}>
+                <Icon name="close" size={16} color={C.faint} />
+              </TouchableOpacity>
+            )}
+            <TouchableOpacity onPress={handleCloseSearch} style={styles.cancelBtn}>
+              <Text style={styles.cancelBtnText}>Cancel</Text>
+            </TouchableOpacity>
+          </View>
+        ) : (
+          <>
+            <Image
+              source={require('../assets/reddit-logo.png')}
+              style={styles.logo}
+              resizeMode="contain"
+            />
+            <View style={styles.headerIcons}>
+              {/* Clickable Search Icon */}
+              <TouchableOpacity
+                onPress={() => setIsSearching(true)}
+                activeOpacity={0.7}
+                hitSlop={{top: 8, bottom: 8, left: 8, right: 8}}
+                style={styles.iconBtn}>
+                <Icon name="search" size={22} color={C.text} />
+              </TouchableOpacity>
+
+              {/* Clickable Chat / Message Icon (Navigates to Ask/Chat tab) */}
+              <TouchableOpacity
+                onPress={handleOpenChat}
+                activeOpacity={0.7}
+                hitSlop={{top: 8, bottom: 8, left: 8, right: 8}}
+                style={styles.iconBtn}>
+                <Icon name="comment" size={22} color={C.text} />
+              </TouchableOpacity>
+            </View>
+          </>
+        )}
       </View>
 
       <View style={styles.chips}>
@@ -84,6 +158,18 @@ export default function HomeScreen() {
         renderItem={({item}) => <PostCard post={item} />}
         contentContainerStyle={styles.list}
         showsVerticalScrollIndicator={false}
+        ListEmptyComponent={
+          <View style={styles.emptyContainer}>
+            <Text style={styles.emptyTitle}>
+              {searchQuery ? 'No matching posts found' : 'No posts yet'}
+            </Text>
+            <Text style={styles.emptySub}>
+              {searchQuery
+                ? `We couldn't find anything for "${searchQuery}". Try different keywords.`
+                : 'Create your first post using the + button below!'}
+            </Text>
+          </View>
+        }
       />
     </View>
   );
@@ -101,6 +187,7 @@ const styles = StyleSheet.create({
     backgroundColor: C.white,
     paddingHorizontal: 14,
     paddingBottom: 8,
+    minHeight: 52,
   },
   logo: {
     width: 104,
@@ -110,6 +197,38 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 16,
+  },
+  iconBtn: {
+    padding: 4,
+    borderRadius: 20,
+  },
+  searchBarContainer: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: C.pill,
+    borderRadius: 24,
+    paddingHorizontal: 12,
+    height: 40,
+    gap: 8,
+  },
+  searchInput: {
+    flex: 1,
+    fontSize: 14,
+    color: C.text,
+    paddingVertical: 0,
+  },
+  clearBtn: {
+    padding: 4,
+  },
+  cancelBtn: {
+    paddingLeft: 6,
+    paddingVertical: 4,
+  },
+  cancelBtnText: {
+    color: C.orange,
+    fontSize: 14,
+    fontWeight: '700',
   },
   chips: {
     flexDirection: 'row',
@@ -142,5 +261,21 @@ const styles = StyleSheet.create({
   },
   list: {
     paddingBottom: 12,
+  },
+  emptyContainer: {
+    padding: 32,
+    alignItems: 'center',
+  },
+  emptyTitle: {
+    fontSize: 16,
+    fontWeight: '700',
+    color: C.text,
+    marginBottom: 6,
+  },
+  emptySub: {
+    fontSize: 13,
+    color: C.faint,
+    textAlign: 'center',
+    lineHeight: 18,
   },
 });

@@ -29,10 +29,12 @@ const SEGMENTS: {key: Segment; label: string}[] = [
 export default function ProfileScreen() {
   const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
   const insets = useSafeAreaInsets();
-  const {userName, userPhoto, posts, signOut} = usePosts();
+  const {userName, userPhoto, posts, signOut, user} = usePosts();
   const [segment, setSegment] = useState<Segment>('overview');
 
-  const myPosts = posts.filter(p => p.author === 'u/' + userName);
+  const myPosts = posts.filter(
+    p => (user && p.authorId === user.uid) || p.author === 'u/' + userName,
+  );
   const showPosts = segment === 'overview' || segment === 'posts';
 
   return (

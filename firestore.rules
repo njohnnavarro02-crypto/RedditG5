@@ -1,0 +1,107 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // ─── Helper Functions ───────────────────────────────────────────────────
+
+    /** True when the request comes from a signed-in user. */
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    /** True when the signed-in user's UID matches the given uid. */
+    function isUser(uid) {
+      return isSignedIn() && request.auth.uid == uid;
+    }
+
+    /** True when the signed-in user has a document in the admins collection. */
+    function isAdmin() {
+      return isSignedIn() &&
+        exists(/databases/$(database)/documents/admins/$(request.auth.uid));
+    }
+
+    /** True when the signed-in user is NOT disabled. */
+    function isNotDisabled() {
+      return isSignedIn() &&
+        (!exists(/databases/$(database)/documents/users/$(request.auth.uid)) ||
+          get(/databases/$(database)/documents/users/$(request.auth.uid)).data.disabled != true);
+    }
+
+    // ─── users/{uid} ────────────────────────────────────────────────────────
+    // Fields: displayName, email, photoURL, createdAt, disabled
+    match /users/{uid} {
+      // Any signed-in user can read any user profile
+      allow read: if isSignedIn();
+
+      // A user can create / update their own document (except disabled field)
+      allow create: if isUser(uid) &&
+        !('disabled' in request.resource.data);
+
+      allow update: if (
+        // The user can update their own profile — but NOT change the disabled field
+        (isUser(uid) && !('disabled' in request.resource.data.diff(resource.data).affectedKeys())) ||
+        // Only admins can change the disabled field
+        isAdmin()
+      );
+
+      // Only admins can delete user documents
+      allow delete: if isAdmin();
+    }
+
+    // ─── posts/{postId} ─────────────────────────────────────────────────────
+    // Fields: authorId, authorName, authorPhotoUrl, text, createdAt,
+    //         imageUrl (optional), likeCount
+    match /posts/{postId} {
+      // Any signed-in user can read posts
+      allow read: if isSignedIn();
+
+      // Create: authorId must equal the signed-in user's UID and user must not be disabled
+      allow create: if isSignedIn() &&
+        isNotDisabled() &&
+        request.resource.data.authorId == request.auth.uid;
+
+      // Edit (non-like fields): only the author can edit
+      allow update: if isSignedIn() && (
+        // Author editing their own post (any fields)
+        resource.data.authorId == request.auth.uid ||
+        // Any signed-in user may update ONLY the likeCount field
+        (request.resource.data.diff(resource.data).affectedKeys().hasOnly(['likeCount']))
+      );
+
+      // Delete: only the author or an administrator
+      allow delete: if isSignedIn() && (
+        resource.data.authorId == request.auth.uid || isAdmin()
+      );
+    }
+
+    // ─── admins/{uid} ───────────────────────────────────────────────────────
+    // Created manually in Firebase Console. No app-level writes.
+    match /admins/{uid} {
+      allow read: if isSignedIn();
+      allow write: if false; // Managed exclusively via Firebase Console
+    }
+
+    // ─── summaries/latest ───────────────────────────────────────────────────
+    // Fields: text, postCount, lastPostAt, updatedAt
+    // Any signed-in user can read and write
+    match /summaries/latest {
+      allow read: if isSignedIn();
+      allow write: if isSignedIn();
+    }
+
+    // ─── insights/latest ────────────────────────────────────────────────────
+    // Fields: topics, mood, updatedAt
+    // Read: any signed-in user. Write: administrators only.
+    match /insights/latest {
+      allow read: if isSignedIn();
+      allow write: if isAdmin();
+    }
+
+    // ─── Deny everything else ───────────────────────────────────────────────
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}
+

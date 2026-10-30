@@ -8,6 +8,8 @@ import {
   User,
 } from 'firebase/auth';
 import {GoogleSignin, statusCodes} from '@react-native-google-signin/google-signin';
+// Firestore user profile upsert — keeps users/{uid} in sync on every sign-in
+import {upsertUserProfile} from './firestoreService';
 import {
   FIREBASE_API_KEY,
   FIREBASE_AUTH_DOMAIN,
@@ -69,6 +71,14 @@ export async function signInWithGoogle(): Promise<User> {
   // Authenticate with Firebase using the Google ID token
   const credential = GoogleAuthProvider.credential(idToken);
   const userCredential = await signInWithCredential(auth, credential);
+
+  // Sync user profile to Firestore users/{uid} (creates on first sign-in, updates on subsequent)
+  const {user} = userCredential;
+  await upsertUserProfile(user.uid, {
+    displayName: user.displayName ?? '',
+    email: user.email ?? '',
+    photoURL: user.photoURL ?? '',
+  });
 
   return userCredential.user;
 }
