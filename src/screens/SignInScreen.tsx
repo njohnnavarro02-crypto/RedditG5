@@ -1,13 +1,47 @@
-import React from 'react';
-import {Image, StyleSheet, Text, TouchableOpacity, View} from 'react-native';
+import React, {useState} from 'react';
+import {
+  ActivityIndicator,
+  Alert,
+  Image,
+  StyleSheet,
+  Text,
+  TouchableOpacity,
+  View,
+} from 'react-native';
 import {useSafeAreaInsets} from 'react-native-safe-area-context';
 import {usePosts} from '../context/PostsContext';
+import {statusCodes} from '../services/firebase';
 import {C} from '../theme';
 
-/** Sign-in gate. Mock auth for the UI demo — no Firebase wired yet. */
+/** Sign-in screen: Google Sign-In linked to Firebase Auth, with Guest fallback. */
 export default function SignInScreen() {
-  const {signIn} = usePosts();
+  const {signIn, signInWithGoogle} = usePosts();
+  const [loadingGoogle, setLoadingGoogle] = useState(false);
   const insets = useSafeAreaInsets();
+
+  const handleGoogleSignIn = async () => {
+    try {
+      setLoadingGoogle(true);
+      await signInWithGoogle();
+    } catch (error: any) {
+      if (error?.code === statusCodes.SIGN_IN_CANCELLED) {
+        // User cancelled the prompt, no alert needed
+        return;
+      } else if (error?.code === statusCodes.IN_PROGRESS) {
+        // Sign in is already in progress
+        return;
+      } else if (error?.code === statusCodes.PLAY_SERVICES_NOT_AVAILABLE) {
+        Alert.alert(
+          'Google Play Services',
+          'Google Play Services are not available or need updating on this device.',
+        );
+      } else {
+        Alert.alert('Sign-In Error', error?.message || 'Failed to sign in with Google.');
+      }
+    } finally {
+      setLoadingGoogle(false);
+    }
+  };
 
   return (
     <View style={[styles.screen, {paddingTop: insets.top + 16, paddingBottom: insets.bottom + 20}]}>
@@ -25,12 +59,26 @@ export default function SignInScreen() {
           See today's top discussions from your favorite communities.
         </Text>
 
-        <TouchableOpacity style={styles.googleBtn} onPress={signIn} activeOpacity={0.8}>
-          <Image source={require('../assets/google-g.png')} style={styles.gIcon} />
-          <Text style={styles.googleText}>Continue with Google</Text>
+        <TouchableOpacity
+          style={styles.googleBtn}
+          onPress={handleGoogleSignIn}
+          disabled={loadingGoogle}
+          activeOpacity={0.8}>
+          {loadingGoogle ? (
+            <ActivityIndicator size="small" color={C.text} />
+          ) : (
+            <>
+              <Image source={require('../assets/google-g.png')} style={styles.gIcon} />
+              <Text style={styles.googleText}>Continue with Google</Text>
+            </>
+          )}
         </TouchableOpacity>
 
-        <TouchableOpacity style={styles.guestBtn} onPress={signIn} activeOpacity={0.8}>
+        <TouchableOpacity
+          style={styles.guestBtn}
+          onPress={signIn}
+          disabled={loadingGoogle}
+          activeOpacity={0.8}>
           <Text style={styles.guestText}>Continue as guest</Text>
         </TouchableOpacity>
 

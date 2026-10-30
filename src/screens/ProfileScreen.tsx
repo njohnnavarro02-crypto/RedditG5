@@ -29,7 +29,7 @@ const SEGMENTS: {key: Segment; label: string}[] = [
 export default function ProfileScreen() {
   const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
   const insets = useSafeAreaInsets();
-  const {userName, posts, signOut} = usePosts();
+  const {userName, userPhoto, posts, signOut} = usePosts();
   const [segment, setSegment] = useState<Segment>('overview');
 
   const myPosts = posts.filter(p => p.author === 'u/' + userName);
@@ -38,7 +38,10 @@ export default function ProfileScreen() {
   return (
     <View style={styles.screen}>
       <View style={[styles.header, {paddingTop: insets.top + 10}]}>
-        <Image source={require('../assets/reddit-icon.png')} style={styles.avatar} />
+        <Image
+          source={userPhoto ? {uri: userPhoto} : require('../assets/reddit-icon.png')}
+          style={styles.avatar}
+        />
         <Text style={styles.name}>u/{userName}</Text>
         <Text style={styles.cakeDay}>Cake day: Jan 15, 2025</Text>
         <View style={styles.karmaRow}>
