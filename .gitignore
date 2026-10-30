@@ -66,6 +66,19 @@ yarn-error.log
 # testing
 /coverage
 
+# Environment Variables
+.env
+.env.*
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
+!.env.example
+
+# Firebase configuration files (Android & iOS)
+android/app/google-services.json
+ios/GoogleService-Info.plist
+
 # Yarn
 .yarn/*
 !.yarn/patches
