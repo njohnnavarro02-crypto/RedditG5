@@ -69,10 +69,6 @@ export default function HomeScreen() {
 
   const sorted = useMemo(() => sortPosts(filteredPosts, sort), [filteredPosts, sort]);
 
-  const handleOpenChat = () => {
-    navigation.navigate('Ask');
-  };
-
   const handleCloseSearch = () => {
     setIsSearching(false);
     setSearchQuery('');
@@ -122,13 +118,13 @@ export default function HomeScreen() {
                 <Icon name="search" size={22} color={C.text} />
               </TouchableOpacity>
 
-              {/* Clickable Chat / Message Icon (Navigates to Ask/Chat tab) */}
+              {/* Clickable Inbox / Notifications Icon */}
               <TouchableOpacity
-                onPress={handleOpenChat}
+                onPress={() => navigation.navigate('Inbox')}
                 activeOpacity={0.7}
                 hitSlop={{top: 8, bottom: 8, left: 8, right: 8}}
                 style={styles.iconBtn}>
-                <Icon name="comment" size={22} color={C.text} />
+                <Icon name="bell" size={22} color={C.text} />
               </TouchableOpacity>
             </View>
           </>

@@ -4,12 +4,12 @@ import {createNativeStackNavigator} from '@react-navigation/native-stack';
 import Icon, {IconName} from '../components/Icon';
 import {usePosts} from '../context/PostsContext';
 import {C} from '../theme';
-import AskScreen from '../screens/AskScreen';
 import CommunitiesScreen from '../screens/CommunitiesScreen';
 import CommunityScreen from '../screens/CommunityScreen';
 import CreateCommunityScreen from '../screens/CreateCommunityScreen';
 import CreatePostScreen from '../screens/CreatePostScreen';
 import HomeScreen from '../screens/HomeScreen';
+import InboxScreen from '../screens/InboxScreen';
 import PostDetailScreen from '../screens/PostDetailScreen';
 import ProfileScreen from '../screens/ProfileScreen';
 import SignInScreen from '../screens/SignInScreen';
@@ -22,7 +22,7 @@ const TAB_ICONS: Record<keyof TabParamList, IconName> = {
   Home: 'home',
   Communities: 'grid',
   Create: 'plus',
-  Ask: 'sparkle',
+  Inbox: 'bell',
   Profile: 'user',
 };
 
@@ -46,7 +46,7 @@ function Tabs() {
       <Tab.Screen name="Home" component={HomeScreen} />
       <Tab.Screen name="Communities" component={CommunitiesScreen} />
       <Tab.Screen name="Create" component={CreatePostScreen} />
-      <Tab.Screen name="Ask" component={AskScreen} />
+      <Tab.Screen name="Inbox" component={InboxScreen} />
       <Tab.Screen name="Profile" component={ProfileScreen} />
     </Tab.Navigator>
   );

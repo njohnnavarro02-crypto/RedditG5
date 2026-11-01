@@ -10,6 +10,6 @@ export type TabParamList = {
   Home: undefined;
   Communities: undefined;
   Create: undefined;
-  Ask: undefined;
+  Inbox: undefined;
   Profile: undefined;
 };

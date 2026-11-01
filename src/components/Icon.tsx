@@ -20,7 +20,8 @@ export type IconName =
   | 'emoji'
   | 'sort'
   | 'video'
-  | 'play';
+  | 'play'
+  | 'bell';
 
 type Props = {
   name: IconName;
@@ -176,6 +177,13 @@ export default function Icon({name, size = 24, color = '#181C1F', strokeWidth = 
       return (
         <Svg {...svgProps}>
           <Path d="M8 6.5v11l9-5.5-9-5.5Z" fill={color} />
+        </Svg>
+      );
+    case 'bell':
+      return (
+        <Svg {...svgProps}>
+          <Path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9Z" {...stroke} />
+          <Path d="M13.73 21a2 2 0 0 1-3.46 0" {...stroke} />
         </Svg>
       );
   }

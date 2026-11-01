@@ -18,6 +18,7 @@ import {useSafeAreaInsets} from 'react-native-safe-area-context';
 import type {NativeStackScreenProps} from '@react-navigation/native-stack';
 import CommunityAvatar from '../components/CommunityAvatar';
 import Icon from '../components/Icon';
+import VideoPlayerModal from '../components/VideoPlayerModal';
 import VotePill from '../components/VotePill';
 import {usePosts} from '../context/PostsContext';
 import {DEFAULT_COMMENTS} from '../data/mock';
@@ -47,6 +48,7 @@ export default function PostDetailScreen({route, navigation}: Props) {
   // Menu and Edit Modal states
   const [showMenu, setShowMenu] = useState(false);
   const [isEditing, setIsEditing] = useState(false);
+  const [playingVideo, setPlayingVideo] = useState(false);
   const [editTitle, setEditTitle] = useState('');
   const [editBody, setEditBody] = useState('');
   const [editImage, setEditImage] = useState('');
@@ -217,36 +219,43 @@ export default function PostDetailScreen({route, navigation}: Props) {
 
             {/* Attached Video Player Card */}
             {!!post.videoUrl && (
-              <TouchableOpacity
-                style={styles.videoCard}
-                activeOpacity={0.85}
-                onPress={() => handleOpenUrl(post.videoUrl)}>
-                <View style={styles.videoPlayerFrame}>
-                  <Image
-                    source={{
-                      uri:
-                        post.imageUrl ||
-                        'https://images.unsplash.com/photo-1542751371-adc38448a05e?w=800&q=80',
-                    }}
-                    style={styles.videoThumb}
-                    resizeMode="cover"
-                  />
-                  <View style={styles.videoOverlay}>
-                    <View style={styles.playBtnCircle}>
-                      <Icon name="play" size={28} color={C.white} />
-                    </View>
-                    <View style={styles.videoTag}>
-                      <Icon name="video" size={14} color={C.white} />
-                      <Text style={styles.videoTagText}>PLAY VIDEO CLIP</Text>
+              <>
+                <TouchableOpacity
+                  style={styles.videoCard}
+                  activeOpacity={0.85}
+                  onPress={() => setPlayingVideo(true)}>
+                  <View style={styles.videoPlayerFrame}>
+                    <Image
+                      source={{
+                        uri:
+                          post.imageUrl ||
+                          'https://images.unsplash.com/photo-1542751371-adc38448a05e?w=800&q=80',
+                      }}
+                      style={styles.videoThumb}
+                      resizeMode="cover"
+                    />
+                    <View style={styles.videoOverlay}>
+                      <View style={styles.playBtnCircle}>
+                        <Icon name="play" size={28} color={C.white} />
+                      </View>
+                      <View style={styles.videoTag}>
+                        <Icon name="video" size={14} color={C.white} />
+                        <Text style={styles.videoTagText}>PLAY VIDEO CLIP</Text>
+                      </View>
                     </View>
                   </View>
-                </View>
-                <View style={styles.videoBottomBar}>
-                  <Text style={styles.videoUrlText} numberOfLines={1}>
-                    ▶ {post.videoUrl}
-                  </Text>
-                </View>
-              </TouchableOpacity>
+                  <View style={styles.videoBottomBar}>
+                    <Text style={styles.videoUrlText} numberOfLines={1}>
+                      ▶ {post.videoUrl}
+                    </Text>
+                  </View>
+                </TouchableOpacity>
+                <VideoPlayerModal
+                  visible={playingVideo}
+                  videoUrl={post.videoUrl}
+                  onClose={() => setPlayingVideo(false)}
+                />
+              </>
             )}
 
             {/* Attached Link */}

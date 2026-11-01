@@ -16,6 +16,7 @@ import type {NativeStackNavigationProp} from '@react-navigation/native-stack';
 import CommunityAvatar from './CommunityAvatar';
 import Icon from './Icon';
 import JoinButton from './JoinButton';
+import VideoPlayerModal from './VideoPlayerModal';
 import VotePill from './VotePill';
 import {usePosts} from '../context/PostsContext';
 import type {RootStackParamList} from '../navigation/types';
@@ -36,6 +37,7 @@ export default function PostCard({post, showCommunity = true}: Props) {
   const [joined, setJoined] = useState(false);
   const [showMenu, setShowMenu] = useState(false);
   const [isEditing, setIsEditing] = useState(false);
+  const [playingVideo, setPlayingVideo] = useState(false);
 
   // Edit fields
   const [editTitle, setEditTitle] = useState(post.title);
@@ -184,36 +186,43 @@ export default function PostCard({post, showCommunity = true}: Props) {
 
       {/* Attached Media: Video Card */}
       {!!post.videoUrl && (
-        <TouchableOpacity
-          style={styles.videoCard}
-          activeOpacity={0.85}
-          onPress={() => handleOpenUrl(post.videoUrl)}>
-          <View style={styles.videoPlayerFrame}>
-            <Image
-              source={{
-                uri:
-                  post.imageUrl ||
-                  'https://images.unsplash.com/photo-1542751371-adc38448a05e?w=800&q=80',
-              }}
-              style={styles.videoThumb}
-              resizeMode="cover"
-            />
-            <View style={styles.videoOverlay}>
-              <View style={styles.playBtnCircle}>
-                <Icon name="play" size={24} color={C.white} />
-              </View>
-              <View style={styles.videoTag}>
-                <Icon name="video" size={13} color={C.white} />
-                <Text style={styles.videoTagText}>PLAY VIDEO CLIP</Text>
+        <>
+          <TouchableOpacity
+            style={styles.videoCard}
+            activeOpacity={0.85}
+            onPress={() => setPlayingVideo(true)}>
+            <View style={styles.videoPlayerFrame}>
+              <Image
+                source={{
+                  uri:
+                    post.imageUrl ||
+                    'https://images.unsplash.com/photo-1542751371-adc38448a05e?w=800&q=80',
+                }}
+                style={styles.videoThumb}
+                resizeMode="cover"
+              />
+              <View style={styles.videoOverlay}>
+                <View style={styles.playBtnCircle}>
+                  <Icon name="play" size={24} color={C.white} />
+                </View>
+                <View style={styles.videoTag}>
+                  <Icon name="video" size={13} color={C.white} />
+                  <Text style={styles.videoTagText}>PLAY VIDEO CLIP</Text>
+                </View>
               </View>
             </View>
-          </View>
-          <View style={styles.videoBottomBar}>
-            <Text style={styles.videoUrlText} numberOfLines={1}>
-              ▶ {post.videoUrl}
-            </Text>
-          </View>
-        </TouchableOpacity>
+            <View style={styles.videoBottomBar}>
+              <Text style={styles.videoUrlText} numberOfLines={1}>
+                ▶ {post.videoUrl}
+              </Text>
+            </View>
+          </TouchableOpacity>
+          <VideoPlayerModal
+            visible={playingVideo}
+            videoUrl={post.videoUrl}
+            onClose={() => setPlayingVideo(false)}
+          />
+        </>
       )}
 
       {/* Attached Media: Link Badge */}

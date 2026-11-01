@@ -103,7 +103,7 @@ export const POSTS: Post[] = [
     score: 9540,
     commentCount: 3,
     myVote: 0,
-    videoUrl: 'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4',
+    videoUrl: 'https://upload.wikimedia.org/wikipedia/commons/transcoded/c/c0/Big_Buck_Bunny_4K.webm/Big_Buck_Bunny_4K.webm.480p.vp9.webm',
     imageUrl: 'https://images.unsplash.com/photo-1542751371-adc38448a05e?w=800&q=80',
     comments: [
       {
@@ -343,7 +343,7 @@ export const POSTS: Post[] = [
     score: 244,
     commentCount: 2,
     myVote: 0,
-    videoUrl: 'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerBlazes.mp4',
+    videoUrl: 'https://upload.wikimedia.org/wikipedia/commons/transcoded/f/f1/Sintel_movie_4K.webm/Sintel_movie_4K.webm.480p.vp9.webm',
     imageUrl: 'https://images.unsplash.com/photo-1511512578047-dfb367046420?w=800&q=80',
     comments: [
       {

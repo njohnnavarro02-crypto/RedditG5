@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, {useMemo, useState} from 'react';
 import {
   FlatList,
   StyleSheet,
@@ -6,8 +6,8 @@ import {
   TouchableOpacity,
   View,
 } from 'react-native';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { useNavigation } from '@react-navigation/native';
+import {useSafeAreaInsets} from 'react-native-safe-area-context';
+import {useIsFocused, useNavigation} from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import CommunityAvatar from '../components/CommunityAvatar';
 import Icon from '../components/Icon';
@@ -19,8 +19,12 @@ import { C } from '../theme';
 /** Communities directory: list of r/ channels with member counts and Join. */
 export default function CommunitiesScreen() {
   const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
+  const isFocused = useIsFocused();
   const insets = useSafeAreaInsets();
   const [joinedIds, setJoinedIds] = useState<Set<string>>(new Set());
+
+  // Automatically refresh when a community is created and user returns to this screen
+  const communitiesList = useMemo(() => [...COMMUNITIES], [isFocused]);
 
   const toggle = (id: string) => {
     setJoinedIds(prev => {
@@ -46,7 +50,7 @@ export default function CommunitiesScreen() {
         </TouchableOpacity>
       </View>
       <FlatList
-        data={COMMUNITIES}
+        data={communitiesList}
         keyExtractor={item => item.id}
         contentContainerStyle={styles.list}
         showsVerticalScrollIndicator={false}

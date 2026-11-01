@@ -45,24 +45,19 @@ const SAMPLE_IMAGES = [
 // Quick sample video clip presets for instant selection
 const SAMPLE_VIDEOS = [
   {
-    name: '🎮 Gaming Clutch Clip (MP4)',
-    url: 'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4',
+    name: '🎮 Gaming Clutch Clip (WebM/MP4)',
+    url: 'https://upload.wikimedia.org/wikipedia/commons/transcoded/c/c0/Big_Buck_Bunny_4K.webm/Big_Buck_Bunny_4K.webm.480p.vp9.webm',
     thumb: 'https://images.unsplash.com/photo-1542751371-adc38448a05e?w=800&q=80',
   },
   {
-    name: '🚀 Space Exploration (MP4)',
-    url: 'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ElephantsDream.mp4',
+    name: '🚀 Sintel Movie Clip',
+    url: 'https://upload.wikimedia.org/wikipedia/commons/transcoded/f/f1/Sintel_movie_4K.webm/Sintel_movie_4K.webm.480p.vp9.webm',
     thumb: 'https://images.unsplash.com/photo-1451187580459-43490279c0fa?w=800&q=80',
   },
   {
-    name: '💻 Code Timelapse (MP4)',
-    url: 'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerBlazes.mp4',
+    name: '💻 Programming / Tech Trailer (YouTube)',
+    url: 'https://www.youtube.com/watch?v=dQw4w9WgXcQ',
     thumb: 'https://images.unsplash.com/photo-1555066931-4365d14bab8c?w=800&q=80',
-  },
-  {
-    name: '🌿 Nature Cinematic (MP4)',
-    url: 'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/TearsOfSteel.mp4',
-    thumb: 'https://images.unsplash.com/photo-1470071459604-3b5ec3a7fe05?w=800&q=80',
   },
 ];
 

@@ -85,6 +85,7 @@ type PostsContextValue = {
   canEditPost: (post: Post) => boolean;
   canDeletePost: (post: Post) => boolean;
   addComment: (postId: string, body: string) => void;
+  updateProfile: (newName: string, newPhoto?: string) => Promise<void>;
 };
 
 const PostsContext = createContext<PostsContextValue | null>(null);
@@ -96,6 +97,8 @@ export function PostsProvider({children}: {children: React.ReactNode}) {
   const [loadingAuth, setLoadingAuth] = useState(true);
   const [firestorePosts, setFirestorePosts] = useState<Post[]>([]);
   const [localPosts, setLocalPosts] = useState<Post[]>(POSTS);
+  const [customUserName, setCustomUserName] = useState<string | null>(null);
+  const [customUserPhoto, setCustomUserPhoto] = useState<string | null>(null);
 
   // Subscribe to Firebase Auth state
   useEffect(() => {
@@ -176,6 +179,9 @@ export function PostsProvider({children}: {children: React.ReactNode}) {
 
   // Resolve user display name
   const userName = useMemo(() => {
+    if (customUserName) {
+      return customUserName;
+    }
     if (user?.displayName) {
       return user.displayName.replace(/\s+/g, '_').toLowerCase();
     }
@@ -183,9 +189,41 @@ export function PostsProvider({children}: {children: React.ReactNode}) {
       return user.email.split('@')[0];
     }
     return USER_NAME;
-  }, [user]);
+  }, [user, customUserName]);
 
-  const userPhoto = user?.photoURL ?? null;
+  const userPhoto = customUserPhoto ?? (user?.photoURL ?? null);
+
+  const updateProfile = useCallback(
+    async (newName: string, newPhoto?: string) => {
+      const cleanName = newName
+        .trim()
+        .replace(/^u\//, '')
+        .replace(/\s+/g, '_')
+        .toLowerCase();
+      const photo = newPhoto?.trim() || null;
+      if (cleanName) {
+        setCustomUserName(cleanName);
+      }
+      setCustomUserPhoto(photo);
+
+      // Update author on any posts authored by previous handle
+      const oldHandle = 'u/' + userName;
+      const newHandle = 'u/' + (cleanName || userName);
+      const postUpdater = (prev: Post[]) =>
+        prev.map(p =>
+          p.author === oldHandle
+            ? {
+                ...p,
+                author: newHandle,
+                authorPhotoUrl: photo || p.authorPhotoUrl,
+              }
+            : p,
+        );
+      setLocalPosts(postUpdater);
+      setFirestorePosts(postUpdater);
+    },
+    [userName],
+  );
 
   // Guest sign in
   const signIn = useCallback(() => {
@@ -412,6 +450,7 @@ export function PostsProvider({children}: {children: React.ReactNode}) {
       canEditPost,
       canDeletePost,
       addComment,
+      updateProfile,
     }),
     [
       user,
@@ -431,6 +470,7 @@ export function PostsProvider({children}: {children: React.ReactNode}) {
       canEditPost,
       canDeletePost,
       addComment,
+      updateProfile,
     ],
   );
 
