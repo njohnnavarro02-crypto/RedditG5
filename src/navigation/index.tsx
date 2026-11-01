@@ -8,6 +8,7 @@ import CommunitiesScreen from '../screens/CommunitiesScreen';
 import CommunityScreen from '../screens/CommunityScreen';
 import CreateCommunityScreen from '../screens/CreateCommunityScreen';
 import CreatePostScreen from '../screens/CreatePostScreen';
+import AskScreen from '../screens/AskScreen';
 import HomeScreen from '../screens/HomeScreen';
 import InboxScreen from '../screens/InboxScreen';
 import PostDetailScreen from '../screens/PostDetailScreen';
@@ -22,6 +23,7 @@ const TAB_ICONS: Record<keyof TabParamList, IconName> = {
   Home: 'home',
   Communities: 'grid',
   Create: 'plus',
+  Ask: 'sparkle',
   Inbox: 'bell',
   Profile: 'user',
 };
@@ -33,19 +35,27 @@ function Tabs() {
         headerShown: false,
         tabBarActiveTintColor: C.orange,
         tabBarInactiveTintColor: C.faint,
-        tabBarStyle: {backgroundColor: C.white, borderTopColor: C.hairline},
-        tabBarLabelStyle: {fontSize: 11, fontWeight: '600'},
+        tabBarStyle: {
+          backgroundColor: C.white,
+          borderTopColor: C.hairline,
+        },
+        tabBarLabelStyle: {fontSize: 10, fontWeight: '600'},
         tabBarIcon: ({color, size}) => (
           <Icon
             name={TAB_ICONS[route.name]}
             color={color}
-            size={route.name === 'Create' ? 26 : size}
+            size={route.name === 'Create' ? 24 : 20}
           />
         ),
       })}>
       <Tab.Screen name="Home" component={HomeScreen} />
       <Tab.Screen name="Communities" component={CommunitiesScreen} />
       <Tab.Screen name="Create" component={CreatePostScreen} />
+      <Tab.Screen
+        name="Ask"
+        component={AskScreen}
+        options={{tabBarLabel: 'Ask AI'}}
+      />
       <Tab.Screen name="Inbox" component={InboxScreen} />
       <Tab.Screen name="Profile" component={ProfileScreen} />
     </Tab.Navigator>

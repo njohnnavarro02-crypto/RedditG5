@@ -25,6 +25,7 @@ service cloud.firestore {
     function isNotDisabled() {
       return isSignedIn() &&
         (!exists(/databases/$(database)/documents/users/$(request.auth.uid)) ||
+          !('disabled' in get(/databases/$(database)/documents/users/$(request.auth.uid)).data) ||
           get(/databases/$(database)/documents/users/$(request.auth.uid)).data.disabled != true);
     }
 
@@ -47,6 +48,11 @@ service cloud.firestore {
 
       // Only admins can delete user documents
       allow delete: if isAdmin();
+
+      // Joined communities subcollection
+      match /joined/{communityId} {
+        allow read, write: if isUser(uid);
+      }
     }
 
     // ─── posts/{postId} ─────────────────────────────────────────────────────
@@ -65,14 +71,46 @@ service cloud.firestore {
       allow update: if isSignedIn() && (
         // Author editing their own post (any fields)
         resource.data.authorId == request.auth.uid ||
-        // Any signed-in user may update ONLY the likeCount field
-        (request.resource.data.diff(resource.data).affectedKeys().hasOnly(['likeCount']))
+        // Any signed-in user may update ONLY the likeCount or score field
+        (request.resource.data.diff(resource.data).affectedKeys().hasOnly(['likeCount'])) ||
+        (request.resource.data.diff(resource.data).affectedKeys().hasOnly(['score'])) ||
+        (request.resource.data.diff(resource.data).affectedKeys().hasOnly(['likeCount', 'score']))
       );
 
       // Delete: only the author or an administrator
       allow delete: if isSignedIn() && (
         resource.data.authorId == request.auth.uid || isAdmin()
       );
+
+      // Comments subcollection
+      match /comments/{commentId} {
+        allow read: if isSignedIn();
+        allow create: if isSignedIn() && isNotDisabled() && request.resource.data.authorId == request.auth.uid;
+        allow update: if isSignedIn() && (
+          resource.data.authorId == request.auth.uid ||
+          isAdmin() ||
+          request.resource.data.diff(resource.data).affectedKeys().hasOnly(['score'])
+        );
+        allow delete: if isSignedIn() && (resource.data.authorId == request.auth.uid || isAdmin());
+
+        // Comment votes subcollection
+        match /votes/{voterUid} {
+          allow read: if isSignedIn();
+          allow write: if isSignedIn() && request.auth.uid == voterUid;
+        }
+      }
+
+      // Votes subcollection
+      match /votes/{voterUid} {
+        allow read: if isSignedIn();
+        allow write: if isSignedIn() && request.auth.uid == voterUid;
+      }
+    }
+
+    // ─── channels/{channelId} ───────────────────────────────────────────────
+    match /channels/{channelId} {
+      allow read: if isSignedIn();
+      allow write: if isAdmin();
     }
 
     // ─── admins/{uid} ───────────────────────────────────────────────────────

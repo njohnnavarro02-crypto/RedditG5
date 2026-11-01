@@ -30,15 +30,30 @@ function sortPosts(posts: Post[], sort: SortKey): Post[] {
   const copy = [...posts];
   switch (sort) {
     case 'new':
-      return copy.sort((a, b) => a.hoursAgo - b.hoursAgo);
+      return copy.sort((a, b) => {
+        const getMs = (p: Post) => {
+          if (!p.createdAt) return Date.now();
+          if (typeof (p.createdAt as any).toMillis === 'function') return (p.createdAt as any).toMillis();
+          if ((p.createdAt as any).seconds) return (p.createdAt as any).seconds * 1000;
+          return new Date(p.createdAt as any).getTime();
+        };
+        const diff = getMs(b) - getMs(a);
+        if (!isNaN(diff) && diff !== 0) return diff;
+        return a.hoursAgo - b.hoursAgo;
+      });
     case 'top':
       return copy.sort((a, b) => b.score - a.score);
     case 'hot':
     default:
       return copy.sort(
-        (a, b) =>
-          b.score / Math.pow(b.hoursAgo + 2, 1.2) -
-          a.score / Math.pow(a.hoursAgo + 2, 1.2),
+        (a, b) => {
+          const aBoost = a.hoursAgo < 0.25 ? 1000 : 0;
+          const bBoost = b.hoursAgo < 0.25 ? 1000 : 0;
+          return (
+            (b.score + bBoost) / Math.pow(b.hoursAgo + 2, 1.2) -
+            (a.score + aBoost) / Math.pow(a.hoursAgo + 2, 1.2)
+          );
+        },
       );
   }
 }
@@ -48,7 +63,7 @@ export default function HomeScreen() {
   const navigation = useNavigation<BottomTabNavigationProp<TabParamList>>();
   const {posts} = usePosts();
   const insets = useSafeAreaInsets();
-  const [sort, setSort] = useState<SortKey>('hot');
+  const [sort, setSort] = useState<SortKey>('new');
   const [isSearching, setIsSearching] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
 
@@ -109,6 +124,15 @@ export default function HomeScreen() {
               resizeMode="contain"
             />
             <View style={styles.headerIcons}>
+              {/* Clickable Ask AI Sparkle Icon */}
+              <TouchableOpacity
+                onPress={() => navigation.navigate('Ask')}
+                activeOpacity={0.7}
+                hitSlop={{top: 8, bottom: 8, left: 8, right: 8}}
+                style={styles.iconBtn}>
+                <Icon name="sparkle" size={22} color={C.orange} />
+              </TouchableOpacity>
+
               {/* Clickable Search Icon */}
               <TouchableOpacity
                 onPress={() => setIsSearching(true)}

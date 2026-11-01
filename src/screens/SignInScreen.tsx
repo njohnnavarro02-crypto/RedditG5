@@ -35,6 +35,11 @@ export default function SignInScreen() {
           'Google Play Services',
           'Google Play Services are not available or need updating on this device.',
         );
+      } else if (error?.message?.includes('NETWORK_ERROR') || error?.code === '7') {
+        Alert.alert(
+          'Network Error',
+          'Could not connect to Google servers. Please check your internet connection and try again.',
+        );
       } else {
         Alert.alert('Sign-In Error', error?.message || 'Failed to sign in with Google.');
       }

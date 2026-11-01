@@ -34,64 +34,80 @@ type FilterTab = 'all' | 'comments' | 'upvotes' | 'mentions';
 export default function InboxScreen() {
   const insets = useSafeAreaInsets();
   const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
-  const {posts, userName} = usePosts();
+  const {posts, userName, user} = usePosts();
   const [activeTab, setActiveTab] = useState<FilterTab>('all');
 
-  // Build notifications from comments on the user's own posts
+  // Build notifications from comments and replies across all posts
   const notifications = useMemo<Notification[]>(() => {
     const items: Notification[] = [];
-    const myHandle = 'u/' + userName;
+    const clean = (s?: string) => (s || '').replace(/^[@u\/]+/, '').trim().toLowerCase();
+    const myCleanName = clean(userName);
 
     posts.forEach(post => {
-      const isMyPost = post.author === myHandle;
+      const isMyPost = user
+        ? post.authorId === user.uid
+        : clean(post.author) === myCleanName;
 
-      // Generate comment notifications for the user's posts
-      if (isMyPost && post.comments && post.comments.length > 0) {
-        post.comments.forEach(comment => {
-          if (comment.author !== myHandle) {
-            items.push({
-              id: `notif_comment_${comment.id}`,
-              type: 'comment',
-              communityId: post.communityId,
-              postId: post.id,
-              from: comment.author,
-              message: `commented on your post "${post.title.slice(0, 40)}${post.title.length > 40 ? '…' : ''}": ${comment.body.slice(0, 60)}${comment.body.length > 60 ? '…' : ''}`,
-              time: comment.time,
-              read: false,
-            });
-          }
-        });
-      }
+      if (!post.comments || post.comments.length === 0) return;
 
-      // Generate upvote notifications for posts with high scores
-      if (isMyPost && post.score > 100) {
+      post.comments.forEach(comment => {
+        const commentAuthorClean = clean(comment.author);
+        const replyToClean = clean(comment.replyToAuthor);
+        const isFromMe = (comment.authorId && user && comment.authorId === user.uid) || commentAuthorClean === myCleanName;
+        const isReplyToMe = Boolean(replyToClean && replyToClean === myCleanName);
+
+        // 1. Reply Notification: someone replied directly to my comment!
+        if (isReplyToMe && !isFromMe) {
+          items.push({
+            id: `notif_reply_${comment.id}`,
+            type: 'reply',
+            communityId: post.communityId,
+            postId: post.id,
+            from: comment.author,
+            message: `replied to your comment: "${comment.body.slice(0, 60)}${comment.body.length > 60 ? '…' : ''}"`,
+            time: comment.time,
+            read: false,
+          });
+        }
+        // 2. Post Comment Notification: someone commented on my post (and it wasn't a reply to another user)
+        else if (isMyPost && !isFromMe && (!comment.replyToAuthor || isReplyToMe)) {
+          items.push({
+            id: `notif_comment_${comment.id}`,
+            type: 'comment',
+            communityId: post.communityId,
+            postId: post.id,
+            from: comment.author,
+            message: `commented on your post "${post.title.slice(0, 40)}${post.title.length > 40 ? '…' : ''}": ${comment.body.slice(0, 60)}${comment.body.length > 60 ? '…' : ''}`,
+            time: comment.time,
+            read: false,
+          });
+        }
+        // 3. Mention Notification: someone mentioned me in any comment
+        else if (!isFromMe && clean(comment.body).includes(myCleanName)) {
+          items.push({
+            id: `notif_mention_${comment.id}`,
+            type: 'mention',
+            communityId: post.communityId,
+            postId: post.id,
+            from: comment.author,
+            message: `mentioned you in r/${post.communityId}: "${comment.body.slice(0, 60)}${comment.body.length > 60 ? '…' : ''}"`,
+            time: comment.time,
+            read: false,
+          });
+        }
+      });
+
+      // Upvote milestone notifications
+      if (isMyPost && post.score >= 5) {
         items.push({
           id: `notif_upvote_${post.id}`,
           type: 'upvote',
           communityId: post.communityId,
           postId: post.id,
           from: 'r/' + post.communityId,
-          message: `Your post "${post.title.slice(0, 40)}${post.title.length > 40 ? '…' : ''}" reached ${post.score.toLocaleString()} upvotes! 🎉`,
+          message: `Your post "${post.title.slice(0, 40)}${post.title.length > 40 ? '…' : ''}" has ${post.score.toLocaleString()} upvotes! 🎉`,
           time: post.time,
           read: false,
-        });
-      }
-
-      // Generate mention notifications (if someone mentions the user in a comment)
-      if (!isMyPost && post.comments) {
-        post.comments.forEach(comment => {
-          if (comment.body.includes(myHandle)) {
-            items.push({
-              id: `notif_mention_${comment.id}`,
-              type: 'mention',
-              communityId: post.communityId,
-              postId: post.id,
-              from: comment.author,
-              message: `mentioned you in r/${post.communityId}: "${comment.body.slice(0, 60)}${comment.body.length > 60 ? '…' : ''}"`,
-              time: comment.time,
-              read: false,
-            });
-          }
         });
       }
     });
@@ -133,7 +149,7 @@ export default function InboxScreen() {
     }
 
     return items;
-  }, [posts, userName]);
+  }, [posts, userName, user]);
 
   // Track which notifications have been read
   const [readIds, setReadIds] = useState<Set<string>>(new Set());

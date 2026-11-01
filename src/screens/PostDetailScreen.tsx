@@ -3,6 +3,7 @@ import {
   Alert,
   FlatList,
   Image,
+  Keyboard,
   KeyboardAvoidingView,
   Linking,
   Modal,
@@ -21,7 +22,6 @@ import Icon from '../components/Icon';
 import VideoPlayerModal from '../components/VideoPlayerModal';
 import VotePill from '../components/VotePill';
 import {usePosts} from '../context/PostsContext';
-import {DEFAULT_COMMENTS} from '../data/mock';
 import type {RootStackParamList} from '../navigation/types';
 import {C} from '../theme';
 import {Comment} from '../types';
@@ -35,6 +35,7 @@ export default function PostDetailScreen({route, navigation}: Props) {
   const {
     posts,
     toggleVote,
+    toggleCommentVote,
     addComment,
     userName,
     canEditPost,
@@ -44,6 +45,7 @@ export default function PostDetailScreen({route, navigation}: Props) {
   } = usePosts();
   const insets = useSafeAreaInsets();
   const [draft, setDraft] = useState('');
+  const [replyingTo, setReplyingTo] = useState<{id: string; author: string} | null>(null);
 
   // Menu and Edit Modal states
   const [showMenu, setShowMenu] = useState(false);
@@ -80,8 +82,10 @@ export default function PostDetailScreen({route, navigation}: Props) {
     if (!body) {
       return;
     }
-    addComment(postId, body);
+    Keyboard.dismiss();
+    addComment(postId, body, replyingTo || undefined);
     setDraft('');
+    setReplyingTo(null);
   };
 
   const handleShare = async () => {
@@ -191,6 +195,7 @@ export default function PostDetailScreen({route, navigation}: Props) {
 
       <FlatList
         data={comments}
+        extraData={comments.length}
         keyExtractor={item => item.id}
         showsVerticalScrollIndicator={false}
         contentContainerStyle={styles.list}
@@ -273,7 +278,7 @@ export default function PostDetailScreen({route, navigation}: Props) {
 
             <View style={styles.actions}>
               <VotePill
-                score={scoreOf(post)}
+                score={post.score}
                 myVote={post.myVote}
                 onUp={() => toggleVote(post.id, 1)}
                 onDown={() => toggleVote(post.id, -1)}
@@ -296,16 +301,46 @@ export default function PostDetailScreen({route, navigation}: Props) {
           </View>
         }
         renderItem={({item}) => (
-          <View style={styles.comment}>
+          <View style={[styles.comment, !!item.replyToId && styles.replyComment]}>
             <Text style={styles.commentMeta}>
               {item.author} • {item.time}
+              {!!item.replyToAuthor && ` • replying to ${item.replyToAuthor}`}
             </Text>
             <Text style={styles.commentBody}>{item.body}</Text>
             <View style={styles.commentActions}>
-              <Icon name="up" size={13} color={C.faint} />
-              <Text style={styles.commentScore}>{fmt(item.score)}</Text>
-              <Icon name="down" size={13} color={C.faint} />
-              <Text style={styles.reply}>Reply</Text>
+              <TouchableOpacity
+                onPress={() => toggleCommentVote(postId, item.id, 1)}
+                hitSlop={{top: 8, bottom: 8, left: 8, right: 4}}
+                activeOpacity={0.6}>
+                <Icon
+                  name="up"
+                  size={14}
+                  color={item.myVote === 1 ? C.orange : C.faint}
+                />
+              </TouchableOpacity>
+              <Text
+                style={[
+                  styles.commentScore,
+                  item.myVote === 1 && {color: C.orange, fontWeight: '700'},
+                  item.myVote === -1 && {color: C.blue, fontWeight: '700'},
+                ]}>
+                {fmt(item.score)}
+              </Text>
+              <TouchableOpacity
+                onPress={() => toggleCommentVote(postId, item.id, -1)}
+                hitSlop={{top: 8, bottom: 8, left: 4, right: 8}}
+                activeOpacity={0.6}>
+                <Icon
+                  name="down"
+                  size={14}
+                  color={item.myVote === -1 ? C.blue : C.faint}
+                />
+              </TouchableOpacity>
+              <TouchableOpacity
+                onPress={() => setReplyingTo({id: item.id, author: item.author})}
+                hitSlop={{top: 8, bottom: 8, left: 8, right: 8}}>
+                <Text style={styles.reply}>Reply</Text>
+              </TouchableOpacity>
             </View>
           </View>
         )}
@@ -320,25 +355,36 @@ export default function PostDetailScreen({route, navigation}: Props) {
         }
       />
 
-      <View style={[styles.composer, {paddingBottom: Math.max(insets.bottom, 8) + 4}]}>
-        <TextInput
-          value={draft}
-          onChangeText={setDraft}
-          placeholder="Add a comment"
-          placeholderTextColor={C.faint}
-          style={styles.composerInput}
-          onSubmitEditing={submit}
-        />
-        <TouchableOpacity
-          onPress={submit}
-          disabled={!draft.trim()}
-          activeOpacity={0.8}>
-          <Text style={[styles.composerBtn, !draft.trim() && styles.composerBtnDisabled]}>
-            Comment
-          </Text>
-        </TouchableOpacity>
+      <View style={[styles.composerWrap, {paddingBottom: Math.max(insets.bottom, 8)}]}>
+        {!!replyingTo && (
+          <View style={styles.replyBanner}>
+            <Text style={styles.replyBannerText} numberOfLines={1}>
+              Replying to <Text style={{fontWeight: '700'}}>{replyingTo.author}</Text>
+            </Text>
+            <TouchableOpacity onPress={() => setReplyingTo(null)}>
+              <Icon name="close" size={14} color={C.faint} />
+            </TouchableOpacity>
+          </View>
+        )}
+        <View style={styles.composer}>
+          <TextInput
+            value={draft}
+            onChangeText={setDraft}
+            placeholder={replyingTo ? `Reply to ${replyingTo.author}...` : 'Add a comment'}
+            placeholderTextColor={C.faint}
+            style={styles.composerInput}
+            onSubmitEditing={submit}
+          />
+          <TouchableOpacity
+            onPress={submit}
+            disabled={!draft.trim()}
+            activeOpacity={0.8}>
+            <Text style={[styles.composerBtn, !draft.trim() && styles.composerBtnDisabled]}>
+              Comment
+            </Text>
+          </TouchableOpacity>
+        </View>
       </View>
-      <Text style={styles.signedAs}>Commenting as u/{userName}</Text>
 
       {/* Options Menu Modal */}
       <Modal
@@ -617,6 +663,26 @@ const styles = StyleSheet.create({
     borderBottomWidth: 1,
     borderBottomColor: C.hairline,
   },
+  replyComment: {
+    paddingLeft: 28,
+    borderLeftWidth: 3,
+    borderLeftColor: C.orange,
+    backgroundColor: '#FAFAFA',
+  },
+  replyBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 14,
+    paddingVertical: 6,
+    backgroundColor: C.orangeSoft,
+    borderBottomWidth: 1,
+    borderBottomColor: C.hairline,
+  },
+  replyBannerText: {
+    fontSize: 12,
+    color: C.orange,
+  },
   commentMeta: {
     fontSize: 11,
     color: C.sub,
@@ -645,14 +711,17 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     color: C.faint,
   },
+  composerWrap: {
+    backgroundColor: C.white,
+    borderTopWidth: 1,
+    borderTopColor: C.hairline,
+  },
   composer: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 12,
     paddingHorizontal: 12,
     paddingTop: 8,
-    borderTopWidth: 1,
-    borderTopColor: C.hairline,
     backgroundColor: C.white,
   },
   composerInput: {

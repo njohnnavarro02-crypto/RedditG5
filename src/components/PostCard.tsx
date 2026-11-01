@@ -33,8 +33,8 @@ type Props = {
 /** Reddit-style feed post card: header row, title, media preview, action pills, CRUD operations. */
 export default function PostCard({post, showCommunity = true}: Props) {
   const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
-  const {toggleVote, canEditPost, canDeletePost, editPost, deletePost} = usePosts();
-  const [joined, setJoined] = useState(false);
+  const {toggleVote, canEditPost, canDeletePost, editPost, deletePost, isJoined, toggleJoin} = usePosts();
+  const joined = isJoined(post.communityId);
   const [showMenu, setShowMenu] = useState(false);
   const [isEditing, setIsEditing] = useState(false);
   const [playingVideo, setPlayingVideo] = useState(false);
@@ -150,7 +150,7 @@ export default function PostCard({post, showCommunity = true}: Props) {
 
         {!mine && (
           <View style={styles.joinWrap}>
-            <JoinButton small joined={joined} onPress={() => setJoined(j => !j)} />
+            <JoinButton small joined={joined} onPress={() => toggleJoin(post.communityId)} />
           </View>
         )}
 
@@ -241,7 +241,7 @@ export default function PostCard({post, showCommunity = true}: Props) {
       {/* Actions Bottom Bar */}
       <View style={styles.actions}>
         <VotePill
-          score={scoreOf(post)}
+          score={post.score}
           myVote={post.myVote}
           onUp={() => toggleVote(post.id, 1)}
           onDown={() => toggleVote(post.id, -1)}

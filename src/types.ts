@@ -9,9 +9,13 @@ export type Community = {
 export type Comment = {
   id: string;
   author: string;
+  authorId?: string;
   time: string;
   body: string;
   score: number;
+  myVote?: MyVote;
+  replyToId?: string;
+  replyToAuthor?: string;
 };
 
 export type MyVote = 1 | -1 | 0;

@@ -80,16 +80,17 @@ export default function ProfileScreen() {
   const [draftPhoto, setDraftPhoto] = useState(userPhoto || '');
   const [saving, setSaving] = useState(false);
 
-  // Filter posts authored by this user
-  const myPosts = useMemo(
-    () =>
-      posts.filter(
-        p => (user && p.authorId === user.uid) || p.author === 'u/' + userName,
-      ),
-    [posts, user, userName],
-  );
+  // Filter posts authored strictly by this user/account
+  const myPosts = useMemo(() => {
+    return posts.filter(p => {
+      if (user) {
+        return !!p.authorId && p.authorId === user.uid;
+      }
+      return !p.authorId && p.author === 'u/' + userName;
+    });
+  }, [posts, user, userName]);
 
-  // Filter comments authored by this user across all posts
+  // Filter comments authored strictly by this user/account
   const myComments = useMemo(() => {
     const list: {
       id: string;
@@ -102,7 +103,10 @@ export default function ProfileScreen() {
 
     posts.forEach(p => {
       (p.comments || []).forEach(c => {
-        if (c.author === 'u/' + userName) {
+        const isMine = user
+          ? (c as any).authorId === user.uid || (p.authorId === user.uid && c.author === 'u/' + userName)
+          : !p.authorId && c.author === 'u/' + userName;
+        if (isMine) {
           list.push({
             id: c.id,
             postId: p.id,
@@ -116,7 +120,7 @@ export default function ProfileScreen() {
     });
 
     return list;
-  }, [posts, userName]);
+  }, [posts, user, userName]);
 
   // Dynamic karma starting at 0 for new accounts
   const postKarma = useMemo(() => {
@@ -153,6 +157,7 @@ export default function ProfileScreen() {
   };
 
   const handleSaveProfile = async () => {
+    if (saving) return;
     const clean = draftName
       .trim()
       .replace(/^u\//, '')
@@ -168,7 +173,7 @@ export default function ProfileScreen() {
     try {
       await updateProfile(clean, draftPhoto.trim() || undefined);
       setIsEditingProfile(false);
-      Alert.alert('Profile Updated', `Your profile has been saved successfully!`);
+      Alert.alert('Profile Updated', 'Your profile has been saved successfully!');
     } catch (err: any) {
       Alert.alert('Error', err.message || 'Failed to update profile.');
     } finally {

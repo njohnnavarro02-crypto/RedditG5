@@ -12,6 +12,7 @@ import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import CommunityAvatar from '../components/CommunityAvatar';
 import Icon from '../components/Icon';
 import JoinButton from '../components/JoinButton';
+import {usePosts} from '../context/PostsContext';
 import { COMMUNITIES } from '../data/mock';
 import type { RootStackParamList } from '../navigation/types';
 import { C } from '../theme';
@@ -21,22 +22,10 @@ export default function CommunitiesScreen() {
   const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
   const isFocused = useIsFocused();
   const insets = useSafeAreaInsets();
-  const [joinedIds, setJoinedIds] = useState<Set<string>>(new Set());
+  const {isJoined, toggleJoin} = usePosts();
 
   // Automatically refresh when a community is created and user returns to this screen
   const communitiesList = useMemo(() => [...COMMUNITIES], [isFocused]);
-
-  const toggle = (id: string) => {
-    setJoinedIds(prev => {
-      const next = new Set(prev);
-      if (next.has(id)) {
-        next.delete(id);
-      } else {
-        next.add(id);
-      }
-      return next;
-    });
-  };
 
   return (
     <View style={styles.screen}>
@@ -67,8 +56,8 @@ export default function CommunitiesScreen() {
               </Text>
             </View>
             <JoinButton
-              joined={joinedIds.has(item.id)}
-              onPress={() => toggle(item.id)}
+              joined={isJoined(item.id)}
+              onPress={() => toggleJoin(item.id)}
             />
           </TouchableOpacity>
         )}

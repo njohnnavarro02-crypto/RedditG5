@@ -30,6 +30,7 @@ import {
   QueryDocumentSnapshot,
   SnapshotOptions,
   FirestoreDataConverter,
+  writeBatch,
 } from 'firebase/firestore';
 import {app, auth} from './firebase';
 
@@ -60,6 +61,27 @@ export interface FirestorePost {
   videoUrl?: string;
   linkUrl?: string;
   likeCount: number;
+}
+
+export interface FirestoreComment {
+  id: string;
+  authorId: string;
+  authorName: string;
+  authorPhotoUrl?: string;
+  body: string;
+  score: number;
+  createdAt: Timestamp | null;
+  replyToId?: string;
+  replyToAuthor?: string;
+}
+
+export interface FirestoreCommunity {
+  id: string;
+  color: string;
+  members: string;
+  online: string;
+  description: string;
+  createdAt?: Timestamp | null;
 }
 
 export interface Summary {
@@ -108,21 +130,24 @@ const postConverter: FirestoreDataConverter<FirestorePost> = {
 
 /**
  * Create or overwrite the signed-in user's Firestore profile.
- * Called right after Google Sign-In succeeds.
+ * Called right after Google Sign-In succeeds or when user updates profile.
+ * Note: Never includes 'disabled' since firestore.rules strictly forbids
+ * clients from writing to the 'disabled' field (!('disabled' in request.resource.data)).
  */
 export async function upsertUserProfile(uid: string, profile: Omit<UserProfile, 'disabled' | 'createdAt'>): Promise<void> {
   const ref = doc(db, 'users', uid);
   const snap = await getDoc(ref);
 
   if (!snap.exists()) {
-    // First-time creation — set disabled: false and createdAt
+    // First-time creation — do NOT include disabled field
     await setDoc(ref, {
-      ...profile,
-      disabled: false,
+      displayName: profile.displayName,
+      email: profile.email,
+      photoURL: profile.photoURL,
       createdAt: serverTimestamp(),
     });
   } else {
-    // Subsequent logins — update mutable fields only (never touch disabled)
+    // Subsequent logins/updates — update mutable profile fields
     await updateDoc(ref, {
       displayName: profile.displayName,
       email: profile.email,
@@ -165,6 +190,8 @@ export async function createPost(
   text: string,
   communityId: string = 'technology',
   media?: {imageUrl?: string; videoUrl?: string; linkUrl?: string},
+  customAuthorName?: string,
+  customAuthorPhoto?: string,
 ): Promise<string> {
   const user = auth.currentUser;
   if (!user) {
@@ -173,8 +200,8 @@ export async function createPost(
 
   const payload: Omit<FirestorePost, 'id'> = {
     authorId: user.uid,
-    authorName: user.displayName ?? user.email ?? 'Anonymous',
-    authorPhotoUrl: user.photoURL ?? '',
+    authorName: customAuthorName || user.displayName || user.email || 'Anonymous',
+    authorPhotoUrl: customAuthorPhoto || user.photoURL || '',
     title,
     text,
     communityId,
@@ -190,6 +217,207 @@ export async function createPost(
     payload,
   );
   return ref.id;
+}
+
+// ─── comments (subcollection: posts/{postId}/comments/{commentId}) ───────────
+
+/**
+ * Add a comment or reply to a post in Firestore.
+ */
+export async function addFirestoreComment(
+  postId: string,
+  body: string,
+  authorName: string,
+  authorPhoto?: string,
+  replyTo?: {id: string; author: string},
+): Promise<string> {
+  const user = auth.currentUser;
+  if (!user) {
+    throw new Error('You must be signed in to comment.');
+  }
+
+  const payload: any = {
+    authorId: user.uid,
+    authorName: authorName || user.displayName || user.email || 'Anonymous',
+    authorPhotoUrl: authorPhoto || user.photoURL || '',
+    body,
+    score: 0,
+    createdAt: serverTimestamp(),
+  };
+
+  if (replyTo) {
+    payload.replyToId = replyTo.id;
+    payload.replyToAuthor = replyTo.author;
+  }
+
+  const ref = await addDoc(
+    collection(db, 'posts', postId, 'comments'),
+    payload,
+  );
+  return ref.id;
+}
+
+// ─── comment votes (posts/{postId}/comments/{commentId}/votes/{uid}) ────────
+
+/**
+ * Cast or remove a vote on a comment in Firestore.
+ */
+export async function castFirestoreCommentVote(
+  postId: string,
+  commentId: string,
+  value: 1 | -1 | 0,
+): Promise<void> {
+  const user = auth.currentUser;
+  if (!user) return;
+  const ref = doc(db, 'posts', postId, 'comments', commentId, 'votes', user.uid);
+  if (value === 0) {
+    await deleteDoc(ref).catch(() => {});
+  } else {
+    await setDoc(ref, {
+      value,
+      updatedAt: serverTimestamp(),
+    }).catch(() => {});
+  }
+}
+
+/**
+ * Update a comment's score by delta.
+ */
+export async function updateCommentVoteScore(
+  postId: string,
+  commentId: string,
+  delta: number,
+): Promise<void> {
+  if (delta === 0) return;
+  await updateDoc(doc(db, 'posts', postId, 'comments', commentId), {
+    score: increment(delta),
+  }).catch(() => {});
+}
+
+/**
+ * Real-time listener for comments on a specific post.
+ */
+export function subscribeFirestoreComments(
+  postId: string,
+  callback: (comments: FirestoreComment[]) => void,
+  onError?: (error: Error) => void,
+): () => void {
+  const q = query(
+    collection(db, 'posts', postId, 'comments'),
+    orderBy('createdAt', 'asc'),
+  );
+
+  return onSnapshot(
+    q,
+    snapshot => {
+      const list: FirestoreComment[] = snapshot.docs.map(docSnap => {
+        const d = docSnap.data();
+        return {
+          id: docSnap.id,
+          authorId: d.authorId || '',
+          authorName: d.authorName || 'Anonymous',
+          authorPhotoUrl: d.authorPhotoUrl,
+          body: d.body || '',
+          score: d.score || 0,
+          createdAt: d.createdAt || null,
+          replyToId: d.replyToId,
+          replyToAuthor: d.replyToAuthor,
+        };
+      });
+      callback(list);
+    },
+    error => {
+      console.warn(`Firestore comments error for post ${postId}:`, error);
+      onError?.(error);
+    },
+  );
+}
+
+// ─── joined communities (users/{uid}/joined/{communityId}) ───────────────────
+
+/**
+ * Toggle join/leave for a community in Firestore.
+ */
+export async function toggleJoinCommunity(
+  communityId: string,
+  joined: boolean,
+): Promise<void> {
+  const user = auth.currentUser;
+  if (!user) return;
+  const ref = doc(db, 'users', user.uid, 'joined', communityId);
+  if (joined) {
+    await setDoc(ref, {
+      communityId,
+      joinedAt: serverTimestamp(),
+    });
+  } else {
+    await deleteDoc(ref);
+  }
+}
+
+/**
+ * Real-time listener for a user's joined communities.
+ */
+export function subscribeJoinedCommunities(
+  uid: string,
+  callback: (joinedIds: string[]) => void,
+): () => void {
+  return onSnapshot(
+    collection(db, 'users', uid, 'joined'),
+    snapshot => {
+      const ids = snapshot.docs.map(d => d.id);
+      callback(ids);
+    },
+    err => {
+      console.warn('Joined communities subscription error:', err);
+    },
+  );
+}
+
+// ─── votes (posts/{postId}/votes/{uid}) ──────────────────────────────────────
+
+/**
+ * Cast or remove a vote in Firestore under posts/{postId}/votes/{uid}.
+ */
+export async function castFirestoreVote(
+  postId: string,
+  value: 1 | -1 | 0,
+): Promise<void> {
+  const user = auth.currentUser;
+  if (!user) return;
+  const ref = doc(db, 'posts', postId, 'votes', user.uid);
+  if (value === 0) {
+    await deleteDoc(ref).catch(() => {});
+  } else {
+    await setDoc(ref, {
+      value,
+      updatedAt: serverTimestamp(),
+    }).catch(() => {});
+  }
+}
+
+/**
+ * Real-time listener for a user's vote on posts.
+ */
+export function subscribeUserVotes(
+  postId: string,
+  uid: string,
+  callback: (vote: 1 | -1 | 0) => void,
+): () => void {
+  return onSnapshot(
+    doc(db, 'posts', postId, 'votes', uid),
+    snap => {
+      if (snap.exists()) {
+        const val = snap.data().value;
+        callback(val === 1 || val === -1 ? val : 0);
+      } else {
+        callback(0);
+      }
+    },
+    () => {
+      callback(0);
+    },
+  );
 }
 
 /**
@@ -263,6 +491,17 @@ export async function editPost(
  * Increment or decrement a post's likeCount by 1.
  * Any signed-in user can call this (enforced by security rules).
  */
+/**
+ * Increment or decrement a post's likeCount/score by delta.
+ * Any signed-in user can call this (enforced by security rules).
+ */
+export async function updatePostVoteScore(postId: string, delta: number): Promise<void> {
+  if (delta === 0) return;
+  await updateDoc(doc(db, 'posts', postId), {
+    likeCount: increment(delta),
+  }).catch(() => {});
+}
+
 export async function toggleLike(postId: string, liked: boolean): Promise<void> {
   await updateDoc(doc(db, 'posts', postId), {
     likeCount: increment(liked ? 1 : -1),
@@ -320,3 +559,54 @@ export async function writeInsights(
   });
 }
 
+
+/**
+ * Real-time listener for user profiles to reflect profile updates across all users immediately.
+ */
+export function subscribeUserProfiles(
+  callback: (profiles: Record<string, {displayName?: string; photoURL?: string}>) => void,
+  onError?: (error: Error) => void,
+): () => void {
+  return onSnapshot(
+    collection(db, 'users'),
+    snapshot => {
+      const map: Record<string, {displayName?: string; photoURL?: string}> = {};
+      snapshot.docs.forEach(doc => {
+        const data = doc.data();
+        map[doc.id] = {
+          displayName: data.displayName,
+          photoURL: data.photoURL,
+        };
+      });
+      callback(map);
+    },
+    error => {
+      console.warn('Firestore user profiles subscription error:', error);
+      onError?.(error);
+    },
+  );
+}
+
+/**
+ * Update all posts authored by a user with the new display name and avatar photo in Firestore.
+ */
+export async function updateUserPostsProfile(
+  uid: string,
+  newDisplayName: string,
+  newPhotoUrl?: string,
+): Promise<void> {
+  const q = query(collection(db, 'posts'), where('authorId', '==', uid));
+  const snap = await getDocs(q);
+  if (snap.empty) return;
+  const batch = writeBatch(db);
+  snap.docs.forEach(docSnap => {
+    const ref = docSnap.ref;
+    const updates: Record<string, any> = { authorName: newDisplayName };
+    if (newPhotoUrl !== undefined) {
+      updates.authorPhotoUrl = newPhotoUrl;
+    }
+    batch.update(ref, updates);
+  });
+  await batch.commit();
+}
+export { updateUserPostsProfile as updateUserPostsAuthorName };

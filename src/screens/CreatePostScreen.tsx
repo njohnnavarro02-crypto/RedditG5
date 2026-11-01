@@ -20,6 +20,7 @@ import Icon from '../components/Icon';
 import {usePosts} from '../context/PostsContext';
 import {COMMUNITIES} from '../data/mock';
 import type {RootStackParamList} from '../navigation/types';
+import {assistWriting, WritingHelperAction} from '../services/aiService';
 import {C} from '../theme';
 
 // Quick sample image presets for instant selection
@@ -45,17 +46,17 @@ const SAMPLE_IMAGES = [
 // Quick sample video clip presets for instant selection
 const SAMPLE_VIDEOS = [
   {
-    name: '🎮 Gaming Clutch Clip (WebM/MP4)',
-    url: 'https://upload.wikimedia.org/wikipedia/commons/transcoded/c/c0/Big_Buck_Bunny_4K.webm/Big_Buck_Bunny_4K.webm.480p.vp9.webm',
+    name: '🎮 Gaming Highlight Reel (MP4)',
+    url: 'https://www.w3schools.com/html/mov_bbb.mp4',
     thumb: 'https://images.unsplash.com/photo-1542751371-adc38448a05e?w=800&q=80',
   },
   {
-    name: '🚀 Sintel Movie Clip',
-    url: 'https://upload.wikimedia.org/wikipedia/commons/transcoded/f/f1/Sintel_movie_4K.webm/Sintel_movie_4K.webm.480p.vp9.webm',
-    thumb: 'https://images.unsplash.com/photo-1451187580459-43490279c0fa?w=800&q=80',
+    name: '🚀 Nature & Science Reel (MP4)',
+    url: 'https://interactive-examples.mdn.mozilla.net/media/cc0-videos/flower.mp4',
+    thumb: 'https://images.unsplash.com/photo-1470071459604-3b5ec3a7fe05?w=800&q=80',
   },
   {
-    name: '💻 Programming / Tech Trailer (YouTube)',
+    name: '💻 Tech Trailer (YouTube)',
     url: 'https://www.youtube.com/watch?v=dQw4w9WgXcQ',
     thumb: 'https://images.unsplash.com/photo-1555066931-4365d14bab8c?w=800&q=80',
   },
@@ -76,6 +77,7 @@ export default function CreatePostScreen() {
   const [videoUrl, setVideoUrl] = useState('');
   const [linkUrl, setLinkUrl] = useState('');
   const [submitting, setSubmitting] = useState(false);
+  const [aiHelperLoading, setAiHelperLoading] = useState(false);
 
   // Modals for attachments
   const [activeModal, setActiveModal] = useState<'image' | 'video' | 'link' | null>(null);
@@ -105,6 +107,27 @@ export default function CreatePostScreen() {
 
   const insertEmoji = (emoji: string) => {
     setBody(prev => prev + emoji);
+  };
+
+  const handleAiAssist = async (action: WritingHelperAction) => {
+    const targetText = body.trim() || title.trim();
+    if (!targetText) {
+      Alert.alert('AI Writing Helper', 'Please enter some text in the title or body first.');
+      return;
+    }
+    setAiHelperLoading(true);
+    try {
+      const result = await assistWriting(targetText, action);
+      if (body.trim()) {
+        setBody(result);
+      } else {
+        setTitle(result);
+      }
+    } catch {
+      Alert.alert('AI Helper', 'Unable to process writing suggestion right now.');
+    } finally {
+      setAiHelperLoading(false);
+    }
   };
 
   const onPost = async () => {
@@ -186,6 +209,38 @@ export default function CreatePostScreen() {
           multiline
           style={styles.bodyInput}
         />
+
+        {/* AI Writing Helper Bar (M9 Requirement: Improve, Shorten, Translate to Filipino) */}
+        <View style={styles.aiHelperBar}>
+          <View style={styles.aiHelperLabelRow}>
+            <Icon name="sparkle" size={13} color={C.orange} />
+            <Text style={styles.aiHelperLabel}>AI Writing Helper</Text>
+            {aiHelperLoading && <Text style={styles.aiHelperLoadingText}>Polishing with AI...</Text>}
+          </View>
+          <View style={styles.aiHelperButtonsRow}>
+            <TouchableOpacity
+              style={styles.aiHelperBtn}
+              onPress={() => handleAiAssist('improve')}
+              disabled={aiHelperLoading}
+              activeOpacity={0.75}>
+              <Text style={styles.aiHelperBtnText}>✨ Improve</Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={styles.aiHelperBtn}
+              onPress={() => handleAiAssist('shorten')}
+              disabled={aiHelperLoading}
+              activeOpacity={0.75}>
+              <Text style={styles.aiHelperBtnText}>✂️ Shorten</Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={styles.aiHelperBtn}
+              onPress={() => handleAiAssist('translate')}
+              disabled={aiHelperLoading}
+              activeOpacity={0.75}>
+              <Text style={styles.aiHelperBtnText}>🇵🇭 Translate to Filipino</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
 
         {/* Attached Image Preview */}
         {!!imageUrl && (
@@ -698,5 +753,48 @@ const styles = StyleSheet.create({
   modalSaveText: {
     color: C.white,
     fontWeight: '700',
+  },
+  aiHelperBar: {
+    marginHorizontal: 16,
+    marginTop: 8,
+    marginBottom: 16,
+    padding: 10,
+    backgroundColor: C.card,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: C.hairline,
+  },
+  aiHelperLabelRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    marginBottom: 8,
+  },
+  aiHelperLabel: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: C.orange,
+  },
+  aiHelperLoadingText: {
+    fontSize: 11,
+    fontStyle: 'italic',
+    color: C.sub,
+    marginLeft: 6,
+  },
+  aiHelperButtonsRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 6,
+  },
+  aiHelperBtn: {
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 8,
+    backgroundColor: C.pill,
+  },
+  aiHelperBtnText: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: C.text,
   },
 });

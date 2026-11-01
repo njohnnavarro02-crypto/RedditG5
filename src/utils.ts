@@ -9,7 +9,7 @@ export function fmt(n: number): string {
   return String(n);
 }
 
-/** Displayed score = base score + the user's active vote. */
+/** Displayed score of the post (already includes all applied votes). */
 export function scoreOf(p: Post): number {
-  return p.score + (p.myVote ?? 0);
+  return p.score;
 }

@@ -1,6 +1,8 @@
 import React, {useEffect, useRef, useState} from 'react';
 import {
   FlatList,
+  KeyboardAvoidingView,
+  Platform,
   StyleSheet,
   Text,
   TextInput,
@@ -12,22 +14,23 @@ import {useNavigation} from '@react-navigation/native';
 import type {NativeStackNavigationProp} from '@react-navigation/native-stack';
 import Icon from '../components/Icon';
 import {usePosts} from '../context/PostsContext';
-import {AI_ANSWERS} from '../data/mock';
 import type {RootStackParamList} from '../navigation/types';
+import {askAiQuestion} from '../services/aiService';
 import {C} from '../theme';
 import {ChatMessage} from '../types';
 
 const GREETING: ChatMessage = {
   id: 'm0',
   role: 'ai',
-  text: "Hi! I've read today's top posts across your communities. Ask me what's trending, or tap a suggestion below.",
+  text: "Hi! I'm your Reddit AI Assistant. Ask me anything about trending community posts, discussions, or any question you have!",
   refs: [],
 };
 
 const SUGGESTIONS = [
-  "What's trending right now?",
+  'How hard is the Rizal subject?',
+  "What's trending across communities?",
   'Summarize r/technology today',
-  'Any good learning posts?',
+  'Who was Jose Rizal?',
 ];
 
 /** Split text into plain parts and [P1]-style citation tokens. */
@@ -35,28 +38,14 @@ function parseCitations(text: string) {
   return text.split(/(\[P\d+\])/g);
 }
 
-function pickAnswer(q: string, counter: number) {
-  const s = q.toLowerCase();
-  if (s.includes('trending') || s.includes('top') || s.includes('happening')) {
-    return AI_ANSWERS[0];
-  }
-  if (s.includes('technolog')) {
-    return AI_ANSWERS[1];
-  }
-  if (s.includes('learn') || s.includes('course') || s.includes('study')) {
-    return AI_ANSWERS[2];
-  }
-  return AI_ANSWERS[counter % AI_ANSWERS.length];
-}
-
-/** "Ask the Feed" chat: mock word-by-word streaming with tappable citations. */
+/** Ask AI chat screen: intelligent answers from live feed & general knowledge with streaming. */
 export default function AskScreen() {
   const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
   const insets = useSafeAreaInsets();
+  const {posts} = usePosts();
   const [messages, setMessages] = useState<ChatMessage[]>([GREETING]);
   const [input, setInput] = useState('');
   const [busy, setBusy] = useState(false);
-  const counterRef = useRef(0);
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const listRef = useRef<FlatList<ChatMessage>>(null);
 
@@ -74,36 +63,84 @@ export default function AskScreen() {
     });
   };
 
-  const respond = (question: string) => {
-    const answer = pickAnswer(question, counterRef.current);
-    counterRef.current += 1;
+  const clearChat = () => {
+    if (timerRef.current) {
+      clearInterval(timerRef.current);
+      timerRef.current = null;
+    }
+    setBusy(false);
+    setMessages([GREETING]);
+  };
+
+  const respond = async (question: string) => {
     const msgId = 'a' + Date.now();
-
     setBusy(true);
-    setMessages(prev => [...prev, {id: msgId, role: 'ai', text: '', refs: []}]);
 
-    const words = answer.text.split(' ');
-    let i = 0;
-    timerRef.current = setInterval(() => {
-      i += 1;
-      const partial = words.slice(0, i).join(' ');
-      const done = i >= words.length;
+    // Initial placeholder while AI is thinking
+    setMessages(prev => [
+      ...prev,
+      {id: msgId, role: 'ai', text: 'Thinking...', refs: []},
+    ]);
+    scrollToBottom();
+
+    if (timerRef.current) {
+      clearInterval(timerRef.current);
+      timerRef.current = null;
+    }
+
+    try {
+      const {answer, refs} = await askAiQuestion(question, posts);
+
+      // Stream words smoothly for a live typing effect
+      const words = (answer || '').trim().split(/\s+/).filter(Boolean);
+      if (words.length <= 1) {
+        setMessages(prev =>
+          prev.map(m => (m.id === msgId ? {...m, text: answer, refs} : m)),
+        );
+        setBusy(false);
+        return;
+      }
+
+      let i = 0;
+      setMessages(prev =>
+        prev.map(m => (m.id === msgId ? {...m, text: words[0] || ''} : m)),
+      );
+
+      timerRef.current = setInterval(() => {
+        i += 1;
+        const partial = words.slice(0, i).join(' ');
+        const done = i >= words.length;
+
+        setMessages(prev =>
+          prev.map(m =>
+            m.id === msgId
+              ? {...m, text: partial, refs: done ? refs : undefined}
+              : m,
+          ),
+        );
+        scrollToBottom();
+
+        if (done) {
+          if (timerRef.current) {
+            clearInterval(timerRef.current);
+            timerRef.current = null;
+          }
+          setBusy(false);
+        }
+      }, 35);
+    } catch {
       setMessages(prev =>
         prev.map(m =>
           m.id === msgId
-            ? {...m, text: partial, refs: done ? answer.refs : undefined}
+            ? {
+                ...m,
+                text: "I couldn't retrieve an answer right now. Please try asking again!",
+              }
             : m,
         ),
       );
-      scrollToBottom();
-      if (done) {
-        if (timerRef.current) {
-          clearInterval(timerRef.current);
-          timerRef.current = null;
-        }
-        setBusy(false);
-      }
-    }, 55);
+      setBusy(false);
+    }
   };
 
   const send = (raw: string) => {
@@ -114,17 +151,30 @@ export default function AskScreen() {
     setInput('');
     setMessages(prev => [...prev, {id: 'u' + Date.now(), role: 'user', text}]);
     scrollToBottom();
-    setTimeout(() => respond(text), 450);
+    setTimeout(() => respond(text), 200);
   };
 
   return (
-    <View style={styles.screen}>
+    <KeyboardAvoidingView
+      style={styles.screen}
+      behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+      {/* Screen Header */}
       <View style={[styles.header, {paddingTop: insets.top + 6}]}>
-        <Icon name="sparkle" size={20} color={C.orange} />
-        <View style={styles.headerText}>
-          <Text style={styles.title}>Ask the Feed</Text>
-          <Text style={styles.subtitle}>AI demo · answers from today's top posts</Text>
+        <View style={styles.sparkleBadge}>
+          <Icon name="sparkle" size={18} color={C.white} />
         </View>
+        <View style={styles.headerText}>
+          <Text style={styles.title}>Ask AI</Text>
+          <Text style={styles.subtitle}>Powered by Reddit community discussions & knowledge</Text>
+        </View>
+        {messages.length > 1 && (
+          <TouchableOpacity
+            onPress={clearChat}
+            hitSlop={{top: 8, bottom: 8, left: 8, right: 8}}
+            style={styles.clearBtn}>
+            <Text style={styles.clearBtnText}>Clear</Text>
+          </TouchableOpacity>
+        )}
       </View>
 
       <FlatList
@@ -146,6 +196,10 @@ export default function AskScreen() {
           const parts = parseCitations(item.text);
           return (
             <View style={styles.aiBubble}>
+              <View style={styles.aiHeaderRow}>
+                <Icon name="sparkle" size={14} color={C.orange} />
+                <Text style={styles.aiLabel}>Reddit AI</Text>
+              </View>
               <Text style={styles.aiText}>
                 {parts.map((part, idx) => {
                   const match = part.match(/^\[P(\d+)\]$/);
@@ -173,12 +227,14 @@ export default function AskScreen() {
         ListFooterComponent={
           messages.length <= 1 ? (
             <View style={styles.suggestions}>
+              <Text style={styles.suggestionsHeading}>Suggested Questions</Text>
               {SUGGESTIONS.map(s => (
                 <TouchableOpacity
                   key={s}
                   style={styles.suggestion}
                   activeOpacity={0.8}
                   onPress={() => send(s)}>
+                  <Icon name="search" size={14} color={C.faint} />
                   <Text style={styles.suggestionText}>{s}</Text>
                 </TouchableOpacity>
               ))}
@@ -187,14 +243,17 @@ export default function AskScreen() {
         }
       />
 
+      {/* Input Composer Field */}
       <View style={[styles.inputBar, {paddingBottom: Math.max(insets.bottom, 8) + 4}]}>
         <TextInput
           value={input}
           onChangeText={setInput}
-          placeholder="Ask the feed..."
+          placeholder="Ask AI anything..."
           placeholderTextColor={C.faint}
           style={styles.input}
+          returnKeyType="send"
           onSubmitEditing={() => send(input)}
+          editable={!busy}
         />
         <TouchableOpacity
           onPress={() => send(input)}
@@ -204,7 +263,7 @@ export default function AskScreen() {
           <Icon name="up" size={20} color={C.white} />
         </TouchableOpacity>
       </View>
-    </View>
+    </KeyboardAvoidingView>
   );
 }
 
@@ -223,6 +282,14 @@ const styles = StyleSheet.create({
     borderBottomWidth: 1,
     borderBottomColor: C.hairline,
   },
+  sparkleBadge: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: C.orange,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
   headerText: {
     flex: 1,
   },
@@ -235,8 +302,20 @@ const styles = StyleSheet.create({
     fontSize: 11,
     color: C.sub,
   },
+  clearBtn: {
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: 14,
+    backgroundColor: C.pill,
+  },
+  clearBtnText: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: C.sub,
+  },
   list: {
     padding: 12,
+    paddingBottom: 20,
   },
   userBubble: {
     alignSelf: 'flex-end',
@@ -245,8 +324,8 @@ const styles = StyleSheet.create({
     borderBottomRightRadius: 4,
     paddingHorizontal: 14,
     paddingVertical: 10,
-    maxWidth: '80%',
-    marginVertical: 4,
+    maxWidth: '82%',
+    marginVertical: 5,
   },
   userText: {
     color: C.white,
@@ -261,9 +340,20 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: C.hairline,
     paddingHorizontal: 14,
-    paddingVertical: 10,
-    maxWidth: '90%',
-    marginVertical: 4,
+    paddingVertical: 12,
+    maxWidth: '92%',
+    marginVertical: 5,
+  },
+  aiHeaderRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    marginBottom: 6,
+  },
+  aiLabel: {
+    fontSize: 12,
+    fontWeight: '800',
+    color: C.orange,
   },
   aiText: {
     color: C.text,
@@ -275,19 +365,31 @@ const styles = StyleSheet.create({
     backgroundColor: C.orangeSoft,
     fontWeight: '800',
     fontSize: 12,
+    borderRadius: 4,
+    overflow: 'hidden',
   },
   suggestions: {
-    marginTop: 10,
+    marginTop: 14,
     gap: 8,
   },
+  suggestionsHeading: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: C.faint,
+    textTransform: 'uppercase',
+    marginBottom: 4,
+  },
   suggestion: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
     alignSelf: 'flex-start',
     borderRadius: 999,
     borderWidth: 1,
     borderColor: C.hairline,
     backgroundColor: C.card,
     paddingHorizontal: 14,
-    paddingVertical: 8,
+    paddingVertical: 9,
   },
   suggestionText: {
     fontSize: 13,
@@ -308,7 +410,7 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: C.pill,
     borderRadius: 999,
-    paddingHorizontal: 14,
+    paddingHorizontal: 16,
     height: 42,
     fontSize: 14,
     color: C.text,

@@ -4,9 +4,11 @@ import React, {
   useContext,
   useEffect,
   useMemo,
+  useRef,
   useState,
 } from 'react';
-import {POSTS} from '../data/mock';
+import {Alert} from 'react-native';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import {Comment, MyVote, Post} from '../types';
 import {USER_NAME} from '../theme';
 import {
@@ -14,6 +16,7 @@ import {
   onAuthStateChanged,
   signInWithGoogle as authSignInWithGoogle,
   signOutEverywhere,
+  firebaseUpdateProfile,
   User,
 } from '../services/firebase';
 import {
@@ -21,9 +24,23 @@ import {
   editPost as firestoreEditPost,
   deletePost as firestoreDeletePost,
   toggleLike as firestoreToggleLike,
+  updatePostVoteScore,
   subscribePosts,
   isCurrentUserAdmin,
+  getUserProfile,
+  upsertUserProfile,
   FirestorePost,
+  updateUserPostsProfile,
+  subscribeUserProfiles,
+  addFirestoreComment,
+  subscribeFirestoreComments,
+  toggleJoinCommunity,
+  subscribeJoinedCommunities,
+  castFirestoreVote,
+  subscribeUserVotes,
+  castFirestoreCommentVote,
+  updateCommentVoteScore,
+  FirestoreComment,
 } from '../services/firestoreService';
 
 function formatTimestamp(ts: any): {time: string; hoursAgo: number} {
@@ -65,6 +82,7 @@ type PostsContextValue = {
   signInWithGoogle: () => Promise<void>;
   signOut: () => Promise<void>;
   toggleVote: (postId: string, dir: 1 | -1) => void;
+  toggleCommentVote: (postId: string, commentId: string, dir: 1 | -1) => void;
   addPost: (
     communityId: string,
     title: string,
@@ -84,8 +102,11 @@ type PostsContextValue = {
   deletePost: (postId: string) => Promise<void>;
   canEditPost: (post: Post) => boolean;
   canDeletePost: (post: Post) => boolean;
-  addComment: (postId: string, body: string) => void;
+  addComment: (postId: string, body: string, replyTo?: {id: string; author: string}) => Promise<void>;
   updateProfile: (newName: string, newPhoto?: string) => Promise<void>;
+  joinedCommunities: Set<string>;
+  toggleJoin: (communityId: string) => Promise<void>;
+  isJoined: (communityId: string) => boolean;
 };
 
 const PostsContext = createContext<PostsContextValue | null>(null);
@@ -96,24 +117,162 @@ export function PostsProvider({children}: {children: React.ReactNode}) {
   const [guestSignedIn, setGuestSignedIn] = useState(false);
   const [loadingAuth, setLoadingAuth] = useState(true);
   const [firestorePosts, setFirestorePosts] = useState<Post[]>([]);
-  const [localPosts, setLocalPosts] = useState<Post[]>(POSTS);
   const [customUserName, setCustomUserName] = useState<string | null>(null);
   const [customUserPhoto, setCustomUserPhoto] = useState<string | null>(null);
+  const [commentsByPost, setCommentsByPost] = useState<Record<string, Comment[]>>({});
+  const [userProfiles, setUserProfiles] = useState<Record<string, {displayName?: string; photoURL?: string}>>({});
+  const [joinedCommunities, setJoinedCommunities] = useState<Set<string>>(new Set());
+  const [userVotes, setUserVotes] = useState<Record<string, 1 | -1 | 0>>({});
+  const prevUidRef = useRef<string | undefined>(undefined);
+
+  // Real-time listener for joined communities in Firestore
+  useEffect(() => {
+    if (!user) {
+      setJoinedCommunities(new Set());
+      return;
+    }
+    const unsub = subscribeJoinedCommunities(user.uid, ids => {
+      setJoinedCommunities(new Set(ids));
+    });
+    return unsub;
+  }, [user]);
+
+  // Real-time listeners for comments on all active Firestore posts
+  useEffect(() => {
+    if (firestorePosts.length === 0) return;
+
+    const unsubs: (() => void)[] = [];
+    firestorePosts.forEach(fp => {
+      const unsub = subscribeFirestoreComments(fp.id, (fComments: FirestoreComment[]) => {
+        if (fComments.length === 0) return;
+        const mappedComments: Comment[] = fComments.map(fc => {
+          const {time} = formatTimestamp(fc.createdAt);
+          return {
+            id: fc.id,
+            author: 'u/' + (fc.authorName || 'anonymous').replace(/\s+/g, '_').toLowerCase(),
+            authorId: fc.authorId,
+            time,
+            body: fc.body,
+            score: fc.score || 0,
+            replyToId: fc.replyToId,
+            replyToAuthor: fc.replyToAuthor,
+          };
+        });
+
+        setCommentsByPost(prev => ({
+          ...prev,
+          [fp.id]: mappedComments,
+        }));
+      });
+      unsubs.push(unsub);
+    });
+
+    return () => {
+      unsubs.forEach(u => u());
+    };
+  }, [firestorePosts]);
+
+  // Real-time listeners for user's votes on all posts
+  useEffect(() => {
+    if (!user || firestorePosts.length === 0) {
+      setUserVotes({});
+      return;
+    }
+
+    const unsubs: (() => void)[] = [];
+    firestorePosts.forEach(fp => {
+      const unsub = subscribeUserVotes(fp.id, user.uid, (vote: 1 | -1 | 0) => {
+        setUserVotes(prev => {
+          if (prev[fp.id] === vote) return prev;
+          return {...prev, [fp.id]: vote};
+        });
+      });
+      unsubs.push(unsub);
+    });
+
+    return () => {
+      unsubs.forEach(u => u());
+    };
+  }, [user, firestorePosts.length]);
+
+  // Listen to all user profiles in real time so other users' name/avatar changes appear instantly
+  useEffect(() => {
+    if (!user) {
+      setUserProfiles({});
+      return;
+    }
+    const unsubscribe = subscribeUserProfiles(profiles => {
+      setUserProfiles(profiles);
+    });
+    return () => {
+      unsubscribe();
+    };
+  }, [user]);
 
   // Subscribe to Firebase Auth state
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, async currentUser => {
+      const currentUid = currentUser?.uid ?? null;
+      const isSwitch = prevUidRef.current !== undefined && prevUidRef.current !== currentUid;
+      prevUidRef.current = currentUid ?? undefined;
+
       setUser(currentUser);
       setLoadingAuth(false);
+
+      if (isSwitch) {
+        // Reset custom state only on actual switch/logout
+        setCustomUserName(null);
+        setCustomUserPhoto(null);
+      }
+
       if (currentUser) {
+        const storageKey = `@user_profile_${currentUser.uid}`;
         try {
-          const adminStatus = await isCurrentUserAdmin();
+          const cached = await AsyncStorage.getItem(storageKey);
+          if (cached) {
+            const data = JSON.parse(cached);
+            if (data.displayName) {
+              setCustomUserName(data.displayName);
+            }
+            if (data.photoURL) {
+              setCustomUserPhoto(data.photoURL);
+            }
+          }
+        } catch {}
+
+        try {
+          const [adminStatus, firestoreProfile] = await Promise.all([
+            isCurrentUserAdmin(),
+            getUserProfile(currentUser.uid),
+          ]);
           setIsAdmin(adminStatus);
+          if (firestoreProfile) {
+            if (firestoreProfile.displayName) {
+              setCustomUserName(
+                firestoreProfile.displayName.replace(/\s+/g, '_').toLowerCase(),
+              );
+            }
+            if (firestoreProfile.photoURL) {
+              setCustomUserPhoto(firestoreProfile.photoURL);
+            }
+          }
         } catch {
           setIsAdmin(false);
         }
       } else {
         setIsAdmin(false);
+        try {
+          const cached = await AsyncStorage.getItem('@user_profile_guest');
+          if (cached) {
+            const data = JSON.parse(cached);
+            if (data.displayName) {
+              setCustomUserName(data.displayName);
+            }
+            if (data.photoURL) {
+              setCustomUserPhoto(data.photoURL);
+            }
+          }
+        } catch {}
       }
     });
     return unsubscribe;
@@ -133,6 +292,7 @@ export function PostsProvider({children}: {children: React.ReactNode}) {
           const authorHandle = fp.authorName
             ? fp.authorName.replace(/\s+/g, '_').toLowerCase()
             : 'anonymous';
+          const postComments = commentsByPost[fp.id] || [];
           return {
             id: fp.id,
             communityId: fp.communityId || 'technology',
@@ -143,13 +303,13 @@ export function PostsProvider({children}: {children: React.ReactNode}) {
             hoursAgo,
             title: fp.title || (fp.text ? fp.text.slice(0, 60) : 'Untitled'),
             body: fp.text || '',
-            score: fp.likeCount || 1,
-            commentCount: 0,
-            myVote: 0,
+            score: fp.likeCount ?? 0,
+            commentCount: postComments.length,
+            myVote: (userVotes[fp.id] as MyVote) || 0,
             imageUrl: fp.imageUrl,
             videoUrl: fp.videoUrl,
             linkUrl: fp.linkUrl,
-            comments: [],
+            comments: postComments,
             createdAt: fp.createdAt,
           };
         });
@@ -163,17 +323,7 @@ export function PostsProvider({children}: {children: React.ReactNode}) {
     return () => {
       unsubscribe();
     };
-  }, [user]);
-
-  // Combined posts list: Firestore posts first, then mock posts that don't collide
-  const posts = useMemo(() => {
-    if (firestorePosts.length === 0) {
-      return localPosts;
-    }
-    const firestoreIds = new Set(firestorePosts.map(p => p.id));
-    const nonCollidingLocal = localPosts.filter(p => !firestoreIds.has(p.id));
-    return [...firestorePosts, ...nonCollidingLocal];
-  }, [firestorePosts, localPosts]);
+  }, [user, commentsByPost]);
 
   const signedIn = !!user || guestSignedIn;
 
@@ -193,6 +343,54 @@ export function PostsProvider({children}: {children: React.ReactNode}) {
 
   const userPhoto = customUserPhoto ?? (user?.photoURL ?? null);
 
+  // 100% Live Firestore posts - no hardcoded mock posts
+  const posts = useMemo(() => {
+    return firestorePosts.map(p => {
+      const isMine = user
+        ? p.authorId === user.uid
+        : !p.authorId && (p.author === 'u/' + userName || p.author === 'u/' + USER_NAME);
+
+      // Resolve author name & photo dynamically from real-time user profiles
+      const authorProfile = p.authorId ? userProfiles[p.authorId] : null;
+      let resolvedAuthor = p.author;
+      let resolvedPhoto = p.authorPhotoUrl;
+
+      if (isMine) {
+        resolvedAuthor = 'u/' + userName;
+        resolvedPhoto = userPhoto ?? p.authorPhotoUrl;
+      } else if (authorProfile?.displayName) {
+        resolvedAuthor = 'u/' + authorProfile.displayName.replace(/\s+/g, '_').toLowerCase();
+        resolvedPhoto = authorProfile.photoURL ?? p.authorPhotoUrl;
+      }
+
+      const postComments = (commentsByPost[p.id] || p.comments || []).map(c => {
+        const commentAuthorProfile = c.authorId ? userProfiles[c.authorId] : null;
+        if (c.authorId && user && c.authorId === user.uid) {
+          return {
+            ...c,
+            author: 'u/' + userName,
+          };
+        }
+        if (commentAuthorProfile?.displayName) {
+          return {
+            ...c,
+            author: 'u/' + commentAuthorProfile.displayName.replace(/\s+/g, '_').toLowerCase(),
+          };
+        }
+        return c;
+      });
+
+      return {
+        ...p,
+        author: resolvedAuthor,
+        authorPhotoUrl: resolvedPhoto,
+        comments: postComments,
+        commentCount: postComments.length,
+        myVote: userVotes[p.id] !== undefined ? userVotes[p.id] : p.myVote,
+      };
+    });
+  }, [firestorePosts, commentsByPost, user, userName, userPhoto, userProfiles, userVotes]);
+
   const updateProfile = useCallback(
     async (newName: string, newPhoto?: string) => {
       const cleanName = newName
@@ -206,27 +404,100 @@ export function PostsProvider({children}: {children: React.ReactNode}) {
       }
       setCustomUserPhoto(photo);
 
-      // Update author on any posts authored by previous handle
-      const oldHandle = 'u/' + userName;
+      // Persist to local AsyncStorage immediately so changes survive any reload
+      const storageKey = `@user_profile_${user?.uid || 'guest'}`;
+      AsyncStorage.setItem(
+        storageKey,
+        JSON.stringify({
+          displayName: cleanName || userName,
+          photoURL: photo,
+        }),
+      ).catch(() => {});
+
+      if (user) {
+        try {
+          await firebaseUpdateProfile(user, {
+            displayName: cleanName || userName,
+            photoURL: photo || user.photoURL || undefined,
+          });
+        } catch (authErr) {
+          console.warn('Failed to update firebase auth profile:', authErr);
+        }
+
+        try {
+          await upsertUserProfile(user.uid, {
+            displayName: cleanName || userName,
+            email: user.email ?? '',
+            photoURL: photo || user.photoURL || '',
+          });
+        } catch (err) {
+          console.warn('Failed to persist profile to Firestore:', err);
+        }
+
+        setUserProfiles(prev => ({
+          ...prev,
+          [user.uid]: {
+            displayName: cleanName || userName,
+            photoURL: photo || user.photoURL || undefined,
+          },
+        }));
+
+        // Also update existing posts in Firestore so future queries and other clients receive it in real-time
+        try {
+          await updateUserPostsProfile(user.uid, cleanName || userName, photo || undefined);
+        } catch (e) {
+          console.warn('Failed to update posts author in Firestore:', e);
+        }
+      }
+
+      // Update author ONLY on posts authored by THIS user
       const newHandle = 'u/' + (cleanName || userName);
       const postUpdater = (prev: Post[]) =>
-        prev.map(p =>
-          p.author === oldHandle
+        prev.map(p => {
+          const isMine = user
+            ? p.authorId === user.uid
+            : !p.authorId && (p.author === 'u/' + userName || p.author === 'u/' + USER_NAME);
+          return isMine
             ? {
                 ...p,
                 author: newHandle,
                 authorPhotoUrl: photo || p.authorPhotoUrl,
               }
-            : p,
-        );
-      setLocalPosts(postUpdater);
+            : p;
+        });
       setFirestorePosts(postUpdater);
+
+      // Update author on any comments authored by THIS user
+      setCommentsByPost(prev => {
+        let changed = false;
+        const updated: Record<string, Comment[]> = {};
+        for (const [pId, cList] of Object.entries(prev)) {
+          const nextList = cList.map(c => {
+            const isMyComment = user
+              ? c.authorId === user.uid
+              : c.author === 'u/' + userName;
+            if (isMyComment) {
+              changed = true;
+              return {...c, author: newHandle};
+            }
+            return c;
+          });
+          updated[pId] = nextList;
+        }
+        if (changed) {
+          AsyncStorage.setItem('@reddit_comments_by_post', JSON.stringify(updated)).catch(() => {});
+          return updated;
+        }
+        return prev;
+      });
     },
-    [userName],
+    [user, userName],
   );
 
   // Guest sign in
   const signIn = useCallback(() => {
+    setCustomUserName(null);
+    setCustomUserPhoto(null);
     setGuestSignedIn(true);
   }, []);
 
@@ -238,16 +509,18 @@ export function PostsProvider({children}: {children: React.ReactNode}) {
   // Universal sign out
   const signOut = useCallback(async () => {
     setGuestSignedIn(false);
+    setCustomUserName(null);
+    setCustomUserPhoto(null);
     await signOutEverywhere();
   }, []);
 
   /** Check if current user can edit a post (only author) */
   const canEditPost = useCallback(
     (post: Post) => {
-      if (user && post.authorId && post.authorId === user.uid) {
-        return true;
+      if (user) {
+        return !!post.authorId && post.authorId === user.uid;
       }
-      return post.author === 'u/' + userName;
+      return !post.authorId && post.author === 'u/' + userName;
     },
     [user, userName],
   );
@@ -258,10 +531,10 @@ export function PostsProvider({children}: {children: React.ReactNode}) {
       if (isAdmin) {
         return true;
       }
-      if (user && post.authorId && post.authorId === user.uid) {
-        return true;
+      if (user) {
+        return !!post.authorId && post.authorId === user.uid;
       }
-      return post.author === 'u/' + userName;
+      return !post.authorId && post.author === 'u/' + userName;
     },
     [user, userName, isAdmin],
   );
@@ -271,12 +544,20 @@ export function PostsProvider({children}: {children: React.ReactNode}) {
     (postId: string, dir: 1 | -1) => {
       // Find current vote
       const current = posts.find(p => p.id === postId);
-      const isUpvoting = current ? current.myVote !== dir && dir === 1 : dir === 1;
+      const prevVote = current?.myVote || 0;
+      const nextVote: MyVote = prevVote === dir ? 0 : dir;
+      const delta = nextVote - prevVote;
+
+      setUserVotes(prev => ({
+        ...prev,
+        [postId]: nextVote,
+      }));
 
       // Update Firestore if it's a Firestore post
-      if (current?.authorId) {
-        firestoreToggleLike(postId, isUpvoting).catch(err => {
-          console.warn('Failed to update like in Firestore:', err);
+      if (current?.authorId && user) {
+        castFirestoreVote(postId, nextVote).catch(() => {});
+        updatePostVoteScore(postId, delta).catch(err => {
+          console.warn('Failed to update score in Firestore:', err);
         });
       }
 
@@ -285,14 +566,47 @@ export function PostsProvider({children}: {children: React.ReactNode}) {
           if (p.id !== postId) {
             return p;
           }
-          const next: MyVote = p.myVote === dir ? 0 : dir;
-          return {...p, myVote: next};
+          return {...p, myVote: nextVote, score: p.score + delta};
         });
 
-      setLocalPosts(updater);
       setFirestorePosts(updater);
     },
-    [posts],
+    [posts, user],
+  );
+
+  /** Reddit-style comment vote toggle: upvote / downvote on comments */
+  const toggleCommentVote = useCallback(
+    (postId: string, commentId: string, dir: 1 | -1) => {
+      setCommentsByPost(prev => {
+        const postComments = prev[postId] || [];
+        const current = postComments.find(c => c.id === commentId);
+        if (!current) return prev;
+
+        const prevVote = current.myVote || 0;
+        const nextVote: MyVote = prevVote === dir ? 0 : dir;
+        const delta = nextVote - prevVote;
+
+        if (user) {
+          castFirestoreCommentVote(postId, commentId, nextVote).catch(() => {});
+          updateCommentVoteScore(postId, commentId, delta).catch(() => {});
+        }
+
+        const updated = postComments.map(c => {
+          if (c.id !== commentId) return c;
+          return {
+            ...c,
+            myVote: nextVote,
+            score: c.score + delta,
+          };
+        });
+
+        return {
+          ...prev,
+          [postId]: updated,
+        };
+      });
+    },
+    [user],
   );
 
   /** Add post - persists to Firestore and updates local state */
@@ -307,9 +621,23 @@ export function PostsProvider({children}: {children: React.ReactNode}) {
 
       if (user) {
         try {
-          createdId = await firestoreCreatePost(title, body, communityId, media);
-        } catch (err) {
-          console.warn('Firestore createPost error (falling back locally):', err);
+          createdId = await firestoreCreatePost(
+            title,
+            body,
+            communityId,
+            media,
+            userName,
+            userPhoto || undefined,
+          );
+        } catch (err: any) {
+          console.warn('Firestore createPost error:', err);
+          Alert.alert(
+            'Firebase Permission Error',
+            'Firestore rejected the post write:\n' +
+              (err?.message || 'Missing or insufficient permissions.') +
+              '\n\nPlease publish the updated firestore.rules in Firebase Console to enable live database writes.',
+          );
+          throw err;
         }
       }
 
@@ -318,21 +646,21 @@ export function PostsProvider({children}: {children: React.ReactNode}) {
         communityId,
         author: 'u/' + userName,
         authorId: user?.uid,
-        authorPhotoUrl: user?.photoURL ?? undefined,
+        authorPhotoUrl: userPhoto ?? user?.photoURL ?? undefined,
         time: 'just now',
         hoursAgo: 0,
         title,
         body,
-        score: 1,
+        score: 0,
         commentCount: 0,
-        myVote: 1, // Reddit auto-upvotes your own post
+        myVote: 0,
         comments: [],
         imageUrl: media?.imageUrl,
         videoUrl: media?.videoUrl,
         linkUrl: media?.linkUrl,
       };
 
-      setLocalPosts(prev => [post, ...prev]);
+      setFirestorePosts(prev => [post, ...prev.filter(p => p.id !== post.id)]);
       return post;
     },
     [user, userName],
@@ -379,7 +707,6 @@ export function PostsProvider({children}: {children: React.ReactNode}) {
           };
         });
 
-      setLocalPosts(updater);
       setFirestorePosts(updater);
     },
     [user],
@@ -396,39 +723,52 @@ export function PostsProvider({children}: {children: React.ReactNode}) {
         }
       }
 
-      setLocalPosts(prev => prev.filter(p => p.id !== postId));
       setFirestorePosts(prev => prev.filter(p => p.id !== postId));
     },
     [user],
   );
 
   const addComment = useCallback(
-    (postId: string, body: string) => {
-      const comment: Comment = {
-        id: 'c' + Date.now(),
-        author: 'u/' + userName,
-        time: 'just now',
+    async (postId: string, body: string, replyTo?: {id: string; author: string}) => {
+      if (!user) {
+        throw new Error('You must be signed in to comment.');
+      }
+
+      await addFirestoreComment(
+        postId,
         body,
-        score: 1,
-      };
-
-      const updater = (prev: Post[]) =>
-        prev.map(p => {
-          if (p.id !== postId) {
-            return p;
-          }
-          const nextComments = [...(p.comments ?? []), comment];
-          return {
-            ...p,
-            commentCount: nextComments.length,
-            comments: nextComments,
-          };
-        });
-
-      setLocalPosts(updater);
-      setFirestorePosts(updater);
+        userName,
+        userPhoto || undefined,
+        replyTo,
+      );
     },
-    [userName],
+    [userName, user, userPhoto],
+  );
+
+  const toggleJoin = useCallback(
+    async (communityId: string) => {
+      const willJoin = !joinedCommunities.has(communityId);
+      setJoinedCommunities(prev => {
+        const next = new Set(prev);
+        if (willJoin) next.add(communityId);
+        else next.delete(communityId);
+        return next;
+      });
+
+      if (user) {
+        try {
+          await toggleJoinCommunity(communityId, willJoin);
+        } catch (e) {
+          console.warn('Firestore toggleJoinCommunity error:', e);
+        }
+      }
+    },
+    [joinedCommunities, user],
+  );
+
+  const isJoined = useCallback(
+    (communityId: string) => joinedCommunities.has(communityId),
+    [joinedCommunities],
   );
 
   const value = useMemo(
@@ -444,6 +784,7 @@ export function PostsProvider({children}: {children: React.ReactNode}) {
       signInWithGoogle,
       signOut,
       toggleVote,
+      toggleCommentVote,
       addPost,
       editPost,
       deletePost,
@@ -451,6 +792,9 @@ export function PostsProvider({children}: {children: React.ReactNode}) {
       canDeletePost,
       addComment,
       updateProfile,
+      joinedCommunities,
+      toggleJoin,
+      isJoined,
     }),
     [
       user,
@@ -464,6 +808,7 @@ export function PostsProvider({children}: {children: React.ReactNode}) {
       signInWithGoogle,
       signOut,
       toggleVote,
+      toggleCommentVote,
       addPost,
       editPost,
       deletePost,
@@ -471,6 +816,9 @@ export function PostsProvider({children}: {children: React.ReactNode}) {
       canDeletePost,
       addComment,
       updateProfile,
+      joinedCommunities,
+      toggleJoin,
+      isJoined,
     ],
   );
 

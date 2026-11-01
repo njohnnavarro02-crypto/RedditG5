@@ -22,13 +22,27 @@ type Props = NativeStackScreenProps<RootStackParamList, 'Community'>;
 /** Community page: colored banner, info card, and that community's feed. */
 export default function CommunityScreen({route, navigation}: Props) {
   const {communityId} = route.params;
-  const {posts} = usePosts();
+  const {posts, isJoined, toggleJoin} = usePosts();
   const insets = useSafeAreaInsets();
-  const [joined, setJoined] = useState(false);
+  const joined = isJoined(communityId);
 
   const community = COMMUNITIES.find(c => c.id === communityId);
   const color = community?.color ?? C.faint;
-  const feed = posts.filter(p => p.communityId === communityId);
+  const feed = React.useMemo(() => {
+    return posts
+      .filter(p => p.communityId === communityId)
+      .sort((a, b) => {
+        const getMs = (p: (typeof posts)[0]) => {
+          if (!p.createdAt) return Date.now();
+          if (typeof (p.createdAt as any).toMillis === 'function') return (p.createdAt as any).toMillis();
+          if ((p.createdAt as any).seconds) return (p.createdAt as any).seconds * 1000;
+          return new Date(p.createdAt as any).getTime();
+        };
+        const diff = getMs(b) - getMs(a);
+        if (!isNaN(diff) && diff !== 0) return diff;
+        return a.hoursAgo - b.hoursAgo;
+      });
+  }, [posts, communityId]);
 
   return (
     <View style={styles.screen}>
@@ -59,7 +73,7 @@ export default function CommunityScreen({route, navigation}: Props) {
                     {community?.members ?? '—'} members • {community?.online ?? '—'} online
                   </Text>
                 </View>
-                <JoinButton joined={joined} onPress={() => setJoined(j => !j)} />
+                <JoinButton joined={joined} onPress={() => toggleJoin(communityId)} />
               </View>
               {!!community?.description && (
                 <Text style={styles.description}>{community.description}</Text>

@@ -58,11 +58,18 @@ export default function VideoPlayerModal({visible, videoUrl, onClose}: Props) {
   <style>
     * { margin: 0; padding: 0; box-sizing: border-box; }
     html, body { width: 100%; height: 100%; background: #000; display: flex; align-items: center; justify-content: center; overflow: hidden; }
-    video { width: 100%; max-height: 100%; object-fit: contain; background: #000; }
+    video { width: 100%; height: 100%; object-fit: contain; background: #000; }
   </style>
 </head>
 <body>
-  <video src="${videoUrl}" controls autoplay playsinline webkit-playsinline preload="auto"></video>
+  <video id="vid" src="${videoUrl}" controls autoplay playsinline webkit-playsinline preload="auto"></video>
+  <script>
+    const v = document.getElementById('vid');
+    if (v) {
+      v.addEventListener('loadeddata', () => { v.play().catch(() => {}); });
+      v.play().catch(() => {});
+    }
+  </script>
 </body>
 </html>`;
   }
@@ -103,7 +110,8 @@ export default function VideoPlayerModal({visible, videoUrl, onClose}: Props) {
 
         <View style={styles.playerContainer}>
           <WebView
-            source={{html: htmlContent}}
+            source={{html: htmlContent, baseUrl: 'https://localhost'}}
+            userAgent="Mozilla/5.0 (Linux; Android 14) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Mobile Safari/537.36"
             allowsFullscreenVideo={true}
             allowsInlineMediaPlayback={true}
             mediaPlaybackRequiresUserAction={false}
